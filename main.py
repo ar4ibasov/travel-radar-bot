@@ -19,7 +19,7 @@ logger = logging.getLogger("MaxTravelEngine")
 # --- КОНФИГУРАЦИЯ МЕССЕНДЖЕРА MAX И КЛЮЧЕЙ ---
 MAX_BOT_TOKEN = os.getenv(
     "MAX_BOT_TOKEN",
-    "F9LHodD0cOLdtWyEzXzapwvtDXuI5ZMuw2xgW3QYS4rJB1PuFKtB41AvUxhR2O0ADiAAoVXob03ZN6IgLkWT"
+    "F9LHodD0cOLdtWyEzXzapwvtDXuI5ZMuw2xgW3QYS4rJB1PuFKtB41AvUxhR200ADiAAoVXob03ZN6IgLkWT"
 )
 # Оставьте пустым для автоопределения канала или укажите числовой ID вручную
 MAX_CHAT_ID = os.getenv("MAX_CHAT_ID", "")
@@ -32,19 +32,19 @@ CHANNEL_LINK = "https://max.ru/channel_radar_travel"
 CACHE_FILE = "max_radar_state.json"
 
 # --- НАСТРОЙКИ РАСПИСАНИЯ И ФИЛЬТРОВ ---
-LOCAL_TZ = timezone(timedelta(hours=5))  # Часовой пояс UTC+5 (Екатеринбург / Тюмень / Сургут)
-SCAN_INTERVAL = 2700                     # Проверка туров каждые 45 минут
+LOCAL_TZ = timezone(timedelta(hours=5))  # UTC+5 (ХМАО / Тюмень / Екатеринбург)
+SCAN_INTERVAL = 2400                     # Проверка туров каждые 40 минут
 MAX_DEALS_PER_CYCLE = 3                  # До 3 лучших предложений за цикл
 MAX_DAYS_AHEAD = 90                      # Горизонт поиска до 3 месяцев
 HOT_DAYS_THRESHOLD = 14                  # До 14 дней — горящий тур
-MIN_TOUR_DISCOUNT = 16                   # Минимальная выгода для пакетных туров (%)
-MIN_FLIGHT_DISCOUNT = 28                 # Повышенный порог для отдельных билетов (%)
+MIN_TOUR_DISCOUNT = 15                   # Минимальная выгода для пакетных туров (%)
+MIN_FLIGHT_DISCOUNT = 26                 # Повышенный порог для отдельных билетов (%)
 
 # Часы выхода редакционных постов (по времени UTC+5)
 EDITORIAL_SLOTS = {
-    "morning": 9,     # 09:00 — Утренний гид и обзор курортов
-    "afternoon": 14,  # 14:00 — Дневная памятка туриста (багаж, валюта, законы)
-    "evening": 19     # 19:00 — Вечерняя подборка лучших пляжей и маршрутов
+    "morning": 9,     # 09:00 — Утренний гид
+    "afternoon": 14,  # 14:00 — Памятка туриста и полезные советы
+    "evening": 19     # 19:00 — Вечерняя подборка локаций
 }
 
 ORIGINS = {
@@ -144,10 +144,10 @@ EDITORIAL_POSTS = {
             "badge": "☀️ УТРЕННИЙ ГИД • КУДА ЛЕТЕТЬ",
             "title": "Почему Нячанг снова стал главным хитом пляжного отдыха",
             "body": (
-                "Вьетнам радует идеальным сочетанием мягкого климата, чистого моря и очень доступных цен внутри страны.\n\n"
+                "Вьетнам радует мягким климатом, чистым морем и очень доступными ценами внутри страны.\n\n"
                 "• <b>Безвизовый въезд:</b> до 45 дней по загранпаспорту без сложных анкет и сборов.\n"
-                "• <b>Питание и фрукты:</b> полноценный ужин с морепродуктами на двоих обходится в 1 200–1 800 ₽.\n"
-                "• <b>Отельная база:</b> за цену скромной «тройки» в других странах здесь доступны высотные отели 4–5★ с панорамными бассейнами на крыше."
+                "• <b>Питание и фрукты:</b> ужин с морепродуктами на двоих обходится в 1 200–1 800 ₽.\n"
+                "• <b>Отельная база:</b> высотные отели 4–5★ с панорамными бассейнами на крыше по цене обычных «троек»."
             ),
             "tip": "Выбирайте отели на первой и второй линии в районе Европейского квартала — вся инфраструктура и пляж будут в 3 минутах ходьбы.",
             "photo": "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1200&q=85",
@@ -158,10 +158,9 @@ EDITORIAL_POSTS = {
             "badge": "🌴 УТРЕННИЙ ОБЗОР • ТРОПИКИ",
             "title": "Остров Хайнань: «Восточные Гавайи» с прямыми перелетами",
             "body": (
-                "Южный берег Китая — одно из самых зеленых и экологически чистых мест Азии с термальными источниками и широкими песчаными бухтами.\n\n"
+                "Южный берег Китая — одно из самых зеленых и экологически чистых мест Азии с термальными источниками.\n\n"
                 "• <b>Бухта Дадунхай:</b> активный центр с кафе, вечерними променадами и удобным заходом в воду.\n"
-                "• <b>Бухта Ялунвань:</b> белоснежный песок, прозрачная вода и премиальные резорты с собственными пляжами.\n"
-                "• <b>Здоровье и климат:</b> более 300 солнечных дней в году и знаменитые центры традиционной медицины."
+                "• <b>Бухта Ялунвань:</b> белоснежный песок, прозрачная вода и премиальные резорты с собственными пляжами."
             ),
             "tip": "Для отдыха с детьми лучше всего подходят отели в бухте Ялунвань — там самое спокойное море без волн.",
             "photo": "https://images.unsplash.com/photo-1540202404-a2f29016b523?auto=format&fit=crop&w=1200&q=85",
@@ -170,13 +169,13 @@ EDITORIAL_POSTS = {
         {
             "id": "m_red_sea",
             "badge": "🌊 УТРЕННИЙ ВЫБОР • КРАСНОЕ МОРЕ",
-            "title": "Шарм-эль-Шейх или Хургада: какой курорт выбрать для отпуска?",
+            "title": "Шарм-эль-Шейх или Хургада: какой курорт выбрать?",
             "body": (
                 "Оба курорта Египта работают по системе «Всё включено», но отличаются природой береговой линии.\n\n"
-                "• <b>Шарм-эль-Шейх:</b> живые коралловые рифы прямо у берега, безветренные бухты (Наама-Бей, Шаркс-Бей) и яркий подводный мир.\n"
-                "• <b>Хургада:</b> пологие песчаные пляжи без коралловой обуви и удобный выезд к древним храмам Луксора."
+                "• <b>Шарм-эль-Шейх:</b> живые коралловые рифы прямо у берега и безветренные бухты (Наама-Бей, Шаркс-Бей).\n"
+                "• <b>Хургада:</b> пологие песчаные пляжи и удобный выезд к древним храмам Луксора."
             ),
-            "tip": "Если летите ради красивого снорклинга и тепла без ветра — смело выбирайте бухты Наама-Бей или Рас-Умм-эль-Сид в Шарме.",
+            "tip": "Ради красивого снорклинга и тепла без ветра выбирайте бухты Наама-Бей или Рас-Умм-эль-Сид в Шарме.",
             "photo": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=85",
             "tags": "#гидпутешественника #Египет #КрасноеМоре"
         }
@@ -187,40 +186,27 @@ EDITORIAL_POSTS = {
             "badge": "🧳 ПАМЯТКА ТУРИСТА • БАГАЖ",
             "title": "Как собрать ручную кладь и не доплачивать в аэропорту",
             "body": (
-                "Даже в безбагажных тарифах можно комфортно улететь в отпуск на 7–10 дней, если знать правила авиакомпаний.\n\n"
-                "• <b>Сверх нормы бесплатно:</b> помимо основного рюкзака вы имеете право взять в салон верхнюю одежду, дамскую сумку или портфель и товары из Duty Free в запечатанном пакете.\n"
-                "• <b>Жидкости в салон:</b> флаконы до 100 мл каждый (общим объемом до 1 литра), упакованные в один прозрачный пакет.\n"
-                "• <b>Пауэрбанки:</b> внешние аккумуляторы перевозятся строго в ручной клади — сдавать их в багаж запрещено правилами безопасности."
+                "Даже в безбагажных тарифах можно комфортно улететь в отпуск на 7–10 дней, зная правила перевозчиков.\n\n"
+                "• <b>Сверх нормы бесплатно:</b> верхняя одежда, дамская сумка или портфель и покупки из Duty Free.\n"
+                "• <b>Жидкости в салон:</b> флаконы до 100 мл каждый в одном прозрачном пакете.\n"
+                "• <b>Пауэрбанки:</b> перевозятся строго в ручной клади — сдавать их в багаж запрещено."
             ),
-            "tip": "Перед выездом в аэропорт взвесьте ручную кладь дома: перевес даже в 1 кг на стойке регистрации стоит в 3 раза дороже онлайн-оплаты.",
+            "tip": "Перед выездом в аэропорт взвесьте ручную кладь дома: перевес на стойке регистрации стоит в 3 раза дороже онлайн-оплаты.",
             "photo": "https://images.unsplash.com/photo-1553531384-cc64ac80f931?auto=format&fit=crop&w=1200&q=85",
             "tags": "#памяткатуриста #лайфхак #авиаперелет"
         },
         {
             "id": "a_currency_tips",
             "badge": "💳 ВАЖНО ЗНАТЬ • ДЕНЬГИ В ПОЕЗДКЕ",
-            "title": "Какую валюту и карты брать с собой на зарубежные курорты",
+            "title": "Какую валюту брать с собой на зарубежные курорты",
             "body": (
                 "Грамотная подготовка бюджета экономит до 10% на конвертациях во время отпуска.\n\n"
-                "• <b>Наличные доллары:</b> берите купюры нового образца (синие, от 2013 года выпуска) без печатей, надписей и надрывов — их принимают по лучшему курсу в Таиланде, Египте, ОАЭ и Вьетнаме.\n"
-                "• <b>Турция и ОАЭ:</b> в крупных торговых центрах и отелях выгодно расплачиваться в местной валюте (лирах и дирхамах), обменяв деньги в городских обменных пунктах, а не в аэропорту."
+                "• <b>Наличные доллары:</b> берите купюры нового образца (синие, от 2013 года) без печатей и надрывов.\n"
+                "• <b>Где менять:</b> в аэропорту меняйте только минимум на такси, а основную сумму — в городских обменных пунктах курорта."
             ),
-            "tip": "Всегда оставляйте 50–100 $ мелкими купюрами по 1, 5 и 10 долларов для оплаты трансфера, чаевых и мелких расходов в первый день.",
+            "tip": "Всегда держите 50–100 $ мелкими купюрами по 1, 5 и 10 долларов для мелких расходов в первый день.",
             "photo": "https://images.unsplash.com/photo-1580519542036-c47de6196ba5?auto=format&fit=crop&w=1200&q=85",
             "tags": "#памяткатуриста #валюта #советы"
-        },
-        {
-            "id": "a_booking_timing",
-            "badge": "📊 СЕКРЕТЫ ЦЕН • КОГДА БРОНИРОВАТЬ",
-            "title": "Горящий тур или раннее бронирование: когда цена самая низкая?",
-            "body": (
-                "Цены на туры и чартеры меняются динамически в зависимости от заполняемости рейсов.\n\n"
-                "• <b>За 45–60 дней до вылета:</b> лучший выбор популярных отелей 4–5★ с высокими рейтингами и минимальная базовая цена.\n"
-                "• <b>За 2–7 дней до вылета:</b> время настоящих «горящих» туров, когда туроператоры закрывают последние места в самолетах со скидками до 35–45%."
-            ),
-            "tip": "Если вы привязаны к конкретным датам отпуска — берите тур заранее. Если готовы собрать чемодан за пару дней — ловите горящие предложения в нашей ленте.",
-            "photo": "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #горящиетуры #экономия"
         }
     ],
     "evening": [
@@ -230,11 +216,11 @@ EDITORIAL_POSTS = {
             "title": "Три самых живописных пляжа Пхукета для идеальных закатов",
             "body": (
                 "Пхукет — это десятки разных бухт, каждая со своим характером и атмосферой.\n\n"
-                "• <b>Ката Ной (Kata Noi):</b> уютная камерная бухта с бирюзовой водой и мягким песком вдали от шумных дорог.\n"
-                "• <b>Най Харн (Nai Harn):</b> один из самых красивых пляжей на юге острова, окруженный зелеными холмами и смотровой площадкой Промтхеп.\n"
-                "• <b>Банг Тао (Bang Tao):</b> шестикилометровая полоса песка с хвойными деревьями и стильными пляжными клубами."
+                "• <b>Ката Ной (Kata Noi):</b> уютная камерная бухта с бирюзовой водой и мягким песком.\n"
+                "• <b>Най Харн (Nai Harn):</b> пляж на юге острова, окруженный зелеными холмами и смотровой площадкой Промтхеп.\n"
+                "• <b>Банг Тао (Bang Tao):</b> шестикилометровая полоса песка с хвойными деревьями."
             ),
-            "tip": "Приезжайте на мыс Промтхеп за 40 минут до заката — оттуда открывается лучший панорамный вид на Андаманское море.",
+            "tip": "Приезжайте на мыс Промтхеп за 40 минут до заката — оттуда открывается лучший вид на Андаманское море.",
             "photo": "https://images.unsplash.com/photo-1552465011-b4e21bf6e79a?auto=format&fit=crop&w=1200&q=85",
             "tags": "#вечернийдайджест #Пхукет #пляжимира"
         },
@@ -243,27 +229,14 @@ EDITORIAL_POSTS = {
             "badge": "✨ ВЕЧЕРНИЙ МАРШРУТ • ВОСТОЧНАЯ СКАЗКА",
             "title": "Вечерний Дубай: где погулять бесплатно и увидеть максимум красоты",
             "body": (
-                "После захода солнца мегаполис превращается в одну большую световю инсталляцию.\n\n"
-                "• <b>Променад Dubai Marina:</b> семикилометровая набережная среди небоскребов и белоснежных яхт.\n"
-                "• <b>Шоу поющих фонтанов у Burj Khalifa:</b> водные залпы высотой с 50-этажный дом каждые полчаса с 18:00 до 23:00.\n"
-                "• <b>Квартал Al Seef:</b> атмосферная набережная в старинном арабском стиле вдоль залива Крик."
+                "После захода солнца мегаполис превращается в световую инсталляцию.\n\n"
+                "• <b>Променад Dubai Marina:</b> семикилометровая набережная среди небоскребов и яхт.\n"
+                "• <b>Шоу фонтанов у Burj Khalifa:</b> водные залпы каждые полчаса с 18:00 до 23:00.\n"
+                "• <b>Квартал Al Seef:</b> набережная в старинном арабском стиле вдоль залива Крик."
             ),
-            "tip": "По заливу Дубай-Крик в районе Al Seef можно переправиться на традиционной деревянной лодке «абра» всего за 1 дирхам.",
+            "tip": "По заливу Дубай-Крик в районе Al Seef можно переправиться на традиционной лодке «абра» всего за 1 дирхам.",
             "photo": "https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1200&q=85",
             "tags": "#вечернийдайджест #Дубай #ОАЭ"
-        },
-        {
-            "id": "e_istanbul_vibe",
-            "badge": "☕️ ВЕЧЕРНЕЕ ВДОХНОВЕНИЕ • ГОРОДА МИРА",
-            "title": "Магия Стамбула: паром через Босфор и чай с видом на два континента",
-            "body": (
-                "Стамбул — идеальное направление как для коротких выходных, так и для насыщенного недельного отпуска.\n\n"
-                "• <b>Район Кадыкёй и Мода:</b> набережная на азиатской стороне, откуда открывается открыточный закатный вид на исторический полуостров.\n"
-                "• <b>Галатский мост и Каракёй:</b> аромат свежего кофе по-турецки, пахлавы и огни проплывающих лайнеров."
-            ),
-            "tip": "Вместо дорогих туристических катеров сядьте на обычный городской паром от пристани Эминёню до Кадыкёя — поездка длится 20 минут и дарит лучшие виды на город.",
-            "photo": "https://images.unsplash.com/photo-1541432901042-2d8bd64b4a9b?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Стамбул #Турция"
         }
     ]
 }
@@ -271,4 +244,450 @@ EDITORIAL_POSTS = {
 MONTHS_RU = {
     1: "января", 2: "февраля", 3: "марта", 4: "апреля",
     5: "мая", 6: "июня", 7: "июля", 8: "августа",
-    9: "сентября", 10: "октября", 11: "ноября
+    9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+}
+DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+
+session = requests.Session()
+app = Flask(__name__)
+resolved_chat_id = None
+
+@app.route("/")
+def health_check():
+    return "MAX Travel Radar Engine is active 24/7!", 200
+
+def load_state():
+    default_state = {
+        "sent_deals": [],
+        "editorial_log": {},
+        "editorial_index": {"morning": 0, "afternoon": 0, "evening": 0}
+    }
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                default_state.update(json.load(f))
+        except Exception:
+            pass
+    return default_state
+
+def save_state(state):
+    try:
+        state["sent_deals"] = state["sent_deals"][-1500:]
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(state, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.warning(f"Ошибка сохранения состояния: {e}")
+
+bot_state = load_state()
+
+# --- АВТООПРЕДЕЛЕНИЕ КАНАЛА И ЗАГРУЗКА КАРТИНОК В MAX API ---
+def get_target_chat_id():
+    global resolved_chat_id
+    if MAX_CHAT_ID and str(MAX_CHAT_ID).strip():
+        return str(MAX_CHAT_ID).strip()
+    if resolved_chat_id:
+        return resolved_chat_id
+
+    headers = {"Authorization": MAX_BOT_TOKEN}
+    params = {"access_token": MAX_BOT_TOKEN}
+    try:
+        res = session.get(f"{MAX_API_BASE}/chats", headers=headers, params=params, timeout=12)
+        if res.status_code == 200:
+            chats = res.json().get("chats", [])
+            for chat in chats:
+                if chat.get("type") in ("channel", "chat"):
+                    resolved_chat_id = str(chat.get("chat_id"))
+                    logger.info(f"🎯 Автоматически найден канал MAX: '{chat.get('title')}' (ID: {resolved_chat_id})")
+                    return resolved_chat_id
+            logger.warning("⚠️ Бот еще не видит каналов. Добавьте бота администратором в ваш канал MAX!")
+        else:
+            logger.error(f"Ошибка получения чатов MAX ({res.status_code}): {res.text}")
+    except Exception as e:
+        logger.error(f"Сбой подключения к /chats MAX API: {e}")
+    return None
+
+def upload_image_to_max(photo_url):
+    """Загружает фото в MAX API (/uploads) и возвращает готовый payload."""
+    headers = {"Authorization": MAX_BOT_TOKEN}
+    params = {"access_token": MAX_BOT_TOKEN, "type": "image"}
+    try:
+        up_init = session.post(f"{MAX_API_BASE}/uploads", headers=headers, params=params, timeout=10)
+        if up_init.status_code == 200:
+            upload_url = up_init.json().get("url")
+            if upload_url:
+                img_resp = session.get(photo_url, timeout=12)
+                if img_resp.status_code == 200:
+                    files = {"data": ("cover.jpg", img_resp.content, "image/jpeg")}
+                    up_done = session.post(upload_url, files=files, timeout=20)
+                    if up_done.status_code == 200:
+                        return up_done.json()
+    except Exception as e:
+        logger.warning(f"Не удалось загрузить фото через /uploads, используем прямую ссылку: {e}")
+    return {"url": photo_url}
+
+def send_to_max_channel(photo_url, html_text, buttons=None):
+    target_chat = get_target_chat_id()
+    if not target_chat:
+        return False
+
+    url = f"{MAX_API_BASE}/messages"
+    headers = {"Authorization": MAX_BOT_TOKEN}
+    params = {"access_token": MAX_BOT_TOKEN, "chat_id": target_chat}
+
+    img_payload = upload_image_to_max(photo_url)
+    attachments = [{"type": "image", "payload": img_payload}]
+
+    if buttons:
+        inline_rows = [[{"type": "link", "text": b["text"], "url": b["url"]}] for b in buttons]
+        attachments.append({"type": "inline_keyboard", "payload": {"buttons": inline_rows}})
+
+    payload = {
+        "text": html_text,
+        "format": "html",
+        "attachments": attachments
+    }
+
+    try:
+        res = session.post(url, headers=headers, params=params, json=payload, timeout=15)
+        if res.status_code in (200, 201):
+            return True
+        logger.error(f"Ошибка отправки в MAX ({res.status_code}): {res.text}")
+    except Exception as e:
+        logger.error(f"Ошибка соединения с MAX API: {e}")
+    return False
+
+# --- ФОРМАТИРОВАНИЕ ---
+def format_price(value):
+    return f"{int(value):,}".replace(",", " ")
+
+def pluralize_nights(n):
+    if 11 <= n % 100 <= 19:
+        return f"{n} ночей"
+    rem = n % 10
+    if rem == 1:
+        return f"{n} ночь"
+    if 2 <= rem <= 4:
+        return f"{n} ночи"
+    return f"{n} ночей"
+
+def format_transfers(count):
+    if count == 0:
+        return "Прямой перелет"
+    elif count == 1:
+        return "1 удобная стыковка"
+    return f"{count} пересадки"
+
+def format_human_date(d_obj):
+    return f"{d_obj.day} {MONTHS_RU[d_obj.month]} ({DAYS_RU[d_obj.weekday()]})"
+
+def fetch_flights(origin_code, one_way="false"):
+    url = "https://api.travelpayouts.com/aviasales/v3/prices_for_dates"
+    params = {
+        "origin": origin_code,
+        "currency": "rub",
+        "sorting": "price",
+        "one_way": one_way,
+        "limit": 100,
+        "token": TRAVELPAYOUTS_TOKEN
+    }
+    try:
+        res = session.get(url, params=params, timeout=15)
+        if res.status_code == 200:
+            return res.json().get("data", [])
+    except Exception as e:
+        logger.error(f"Ошибка API перелетов ({origin_code}): {e}")
+    return []
+
+def fetch_hotel_stay_price(city_en, check_in, check_out, fallback_per_night, nights):
+    url = "http://engine.hotellook.com/api/v2/cache.json"
+    params = {
+        "location": city_en,
+        "checkIn": check_in,
+        "checkOut": check_out,
+        "adults": 2,
+        "currency": "rub",
+        "limit": 5,
+        "token": TRAVELPAYOUTS_TOKEN
+    }
+    try:
+        res = session.get(url, params=params, timeout=6)
+        if res.status_code == 200:
+            hotels = res.json()
+            if isinstance(hotels, list) and hotels:
+                prices = [h.get("priceFrom") for h in hotels if h.get("priceFrom")]
+                if prices:
+                    return int(min(prices))
+    except Exception:
+        pass
+    return int(fallback_per_night * nights)
+
+def build_tour_card(d):
+    is_hot = d["days_left"] <= HOT_DAYS_THRESHOLD
+
+    if d["is_package_tour"]:
+        if d["discount"] >= 30:
+            header = "💎🔥 <b>ЭКСКЛЮЗИВНЫЙ ПАКЕТНЫЙ ТУР: СУПЕРЦЕНА!</b>"
+        elif is_hot:
+            header = f"🔥🏖 <b>ГОРЯЩИЙ ТУР НА МОРЕ (ВЫГОДА {d['discount']}%)</b>"
+        else:
+            header = f"🌴🗓 <b>ПАКЕТНЫЙ ТУР: РАННЕЕ БРОНИРОВАНИЕ (-{d['discount']}%)</b>"
+
+        text = (
+            f"{header}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"📍 <b>{d['orig_name']} ➔ {d['dest_name']}</b>\n\n"
+            f"📅 <b>Даты тура:</b> {d['dates_human']}\n"
+            f"🌙 <b>Длительность:</b> {pluralize_nights(d['nights'])}\n"
+            f"🏨 <b>Проживание:</b> {d['stars']} • {d['meal']}\n"
+            f"✈️ <b>Перелет:</b> Туда-обратно ({d['airline']}, {d['transfer_str']})\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 <b>За 1 человека (при двухместном):</b> {format_price(d['tour_price_1'])} ₽\n"
+            f"👩‍❤️‍👨 <b>Полный тур на двоих: {format_price(d['tour_price_2'])} ₽</b> <s>{format_price(d['tour_avg_2'])} ₽</s>\n"
+            f"💸 <b>Ваша экономия на паре:</b> {format_price(d['saved_2'])} ₽\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"✨ <i>В расчет включены перелет туда-обратно на двоих и проживание в курортном отеле.</i>\n\n"
+            f"{d['hashtags']}"
+        )
+
+        buttons = [
+            {"text": f"🏖 Выбрать отель ({format_price(d['hotel_stay_2'])} ₽ за все ночи)", "url": d["hotel_link"]},
+            {"text": f"✈️ Забрать перелет на двоих ({format_price(d['flight_price_2'])} ₽)", "url": d["flight_link_2"]},
+            {"text": "📡 Радар Путешествий в MAX", "url": CHANNEL_LINK}
+        ]
+    else:
+        header = f"⚡️✈️ <b>РЕДКИЙ ОБВАЛ ЦЕН НА АВИАБИЛЕТЫ (-{d['discount']}%)</b>"
+        text = (
+            f"{header}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"📍 <b>{d['orig_name']} ➔ {d['dest_name']}</b>\n\n"
+            f"📅 <b>Дата вылета:</b> {d['dates_human']}\n"
+            f"✈️ <b>Рейс:</b> {d['airline']} • {d['transfer_str']}\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"👤 <b>Билет на одного:</b> {format_price(d['flight_price_1'])} ₽ <s>{format_price(d['flight_avg_1'])} ₽</s>\n"
+            f"👥 <b>Билеты на двоих: {format_price(d['flight_price_2'])} ₽</b> <i>(выгода {format_price(d['saved_2'])} ₽)</i>\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"🔥 <i>Эксклюзивный тариф для самостоятельного путешествия!</i>\n\n"
+            f"{d['hashtags']}"
+        )
+
+        buttons = [
+            {"text": f"🎟 Билет на 1 чел. — {format_price(d['flight_price_1'])} ₽", "url": d["flight_link_1"]},
+            {"text": f"👩‍❤️‍👨 Билеты на двоих — {format_price(d['flight_price_2'])} ₽", "url": d["flight_link_2"]}
+        ]
+
+    return text, buttons
+
+def check_and_publish_editorial():
+    now_local = datetime.now(LOCAL_TZ)
+    today_str = now_local.strftime("%Y-%m-%d")
+    current_hour = now_local.hour
+
+    for slot_name, target_hour in EDITORIAL_SLOTS.items():
+        log_key = f"{today_str}_{slot_name}"
+        if current_hour == target_hour and not bot_state["editorial_log"].get(log_key):
+            posts_list = EDITORIAL_POSTS[slot_name]
+            idx = bot_state["editorial_index"].get(slot_name, 0) % len(posts_list)
+            post = posts_list[idx]
+
+            html_text = (
+                f"{post['badge']}\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"<b>{post['title']}</b>\n\n"
+                f"{post['body']}\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"💡 <b>Совет Радара:</b> <i>{post['tip']}</i>\n\n"
+                f"{post['tags']} #радарпутешествий"
+            )
+            buttons = [{"text": "📡 Поделиться каналом в MAX", "url": CHANNEL_LINK}]
+
+            if send_to_max_channel(post["photo"], html_text, buttons):
+                bot_state["editorial_log"][log_key] = True
+                bot_state["editorial_index"][slot_name] = idx + 1
+                save_state(bot_state)
+                logger.info(f"📰 Опубликован редакционный пост [{slot_name}]: {post['title']}")
+                time.sleep(5)
+
+def run_radar_cycle():
+    check_and_publish_editorial()
+
+    logger.info("📡 Сканирование пакетных туров и эксклюзивных перелетов...")
+    today = date.today()
+    sent_set = set(bot_state["sent_deals"])
+    candidates = []
+
+    origin_items = list(ORIGINS.items())
+    random.shuffle(origin_items)
+
+    for orig_code, orig_meta in origin_items:
+        flights_rt = fetch_flights(orig_code, one_way="false")
+        flights_ow = fetch_flights(orig_code, one_way="true")
+        all_flights = flights_rt + flights_ow
+
+        if not all_flights:
+            continue
+
+        dest_prices = {}
+        for f in all_flights:
+            d_code = f.get("destination")
+            p = f.get("price") or f.get("value")
+            if d_code and p:
+                key = f"{d_code}_{'RT' if f.get('return_at') else 'OW'}"
+                dest_prices.setdefault(key, []).append(p)
+
+        dest_avg = {k: sum(v) / len(v) for k, v in dest_prices.items()}
+
+        for f in all_flights:
+            dest_code = f.get("destination")
+            flight_price_1 = f.get("price") or f.get("value")
+            dep_at = f.get("departure_at", "")[:10]
+            ret_at = f.get("return_at", "")[:10]
+
+            if not flight_price_1 or not dep_at or dest_code not in CITY_DATA:
+                continue
+
+            try:
+                dep_date = datetime.strptime(dep_at, "%Y-%m-%d").date()
+                days_left = (dep_date - today).days
+                if not (0 <= days_left <= MAX_DAYS_AHEAD):
+                    continue
+            except ValueError:
+                continue
+
+            deal_id = f"{orig_code}_{dest_code}_{dep_at}_{ret_at}_{flight_price_1}"
+            if deal_id in sent_set:
+                continue
+
+            is_rt = bool(ret_at)
+            avg_flight_1 = dest_avg.get(f"{dest_code}_{'RT' if is_rt else 'OW'}", flight_price_1)
+            if flight_price_1 >= avg_flight_1:
+                continue
+
+            dest_info = CITY_DATA[dest_code]
+            ddmm_dep = dep_at[8:10] + dep_at[5:7]
+            airline_code = f.get("airline", "")
+            airline_name = AIRLINES.get(airline_code, f"Рейс {airline_code}" if airline_code else "Регулярный рейс")
+
+            if is_rt:
+                try:
+                    ret_date = datetime.strptime(ret_at, "%Y-%m-%d").date()
+                    nights = (ret_date - dep_date).days
+                    if not (5 <= nights <= 15):
+                        continue
+                except ValueError:
+                    continue
+
+                hotel_stay_2 = fetch_hotel_stay_price(
+                    dest_info["en"], dep_at, ret_at, dest_info["hotel_base_2p"], nights
+                )
+                avg_hotel_stay_2 = int(dest_info["hotel_base_2p"] * nights * 1.18)
+
+                flight_price_2 = flight_price_1 * 2
+                flight_avg_2 = int(avg_flight_1 * 2)
+
+                tour_price_2 = flight_price_2 + hotel_stay_2
+                tour_avg_2 = flight_avg_2 + avg_hotel_stay_2
+                tour_price_1 = tour_price_2 // 2
+
+                discount = int((1 - (tour_price_2 / tour_avg_2)) * 100)
+                if discount < MIN_TOUR_DISCOUNT:
+                    continue
+
+                ddmm_ret = ret_at[8:10] + ret_at[5:7]
+                search_route = f"{orig_code}{ddmm_dep}{dest_code}{ddmm_ret}"
+                hotel_link = (
+                    f"https://search.hotellook.com/?destination={dest_info['en']}"
+                    f"&checkIn={dep_at}&checkOut={ret_at}&adults=2&marker={MARKER}&language=ru"
+                )
+
+                candidates.append({
+                    "deal_id": deal_id,
+                    "is_package_tour": True,
+                    "priority_score": discount + 20,
+                    "orig_name": orig_meta["name"],
+                    "dest_name": dest_info["name"],
+                    "photo": dest_info["photo"],
+                    "dates_human": f"{format_human_date(dep_date)} – {format_human_date(ret_date)}",
+                    "days_left": days_left,
+                    "nights": nights,
+                    "stars": dest_info["stars"],
+                    "meal": dest_info["meal"],
+                    "airline": airline_name,
+                    "transfer_str": format_transfers(f.get("transfers", 0)),
+                    "discount": discount,
+                    "tour_price_1": tour_price_1,
+                    "tour_price_2": tour_price_2,
+                    "tour_avg_2": tour_avg_2,
+                    "hotel_stay_2": hotel_stay_2,
+                    "flight_price_2": flight_price_2,
+                    "saved_2": tour_avg_2 - tour_price_2,
+                    "hotel_link": hotel_link,
+                    "flight_link_2": f"https://www.aviasales.ru/search/{search_route}2?marker={MARKER}",
+                    "hashtags": f"{orig_meta['tag']} {dest_info['tag']} #пакетныйтур #отпускподключ"
+                })
+            else:
+                discount = int((1 - (flight_price_1 / avg_flight_1)) * 100)
+                if discount < MIN_FLIGHT_DISCOUNT:
+                    continue
+
+                flight_avg_1 = int(avg_flight_1)
+                flight_price_2 = flight_price_1 * 2
+                saved_2 = (flight_avg_1 * 2) - flight_price_2
+                search_route = f"{orig_code}{ddmm_dep}{dest_code}"
+
+                candidates.append({
+                    "deal_id": deal_id,
+                    "is_package_tour": False,
+                    "priority_score": discount,
+                    "orig_name": orig_meta["name"],
+                    "dest_name": dest_info["name"],
+                    "photo": dest_info["photo"],
+                    "dates_human": f"{format_human_date(dep_date)} (через {days_left} дн.)",
+                    "days_left": days_left,
+                    "airline": airline_name,
+                    "transfer_str": format_transfers(f.get("transfers", 0)),
+                    "discount": discount,
+                    "flight_price_1": flight_price_1,
+                    "flight_avg_1": flight_avg_1,
+                    "flight_price_2": flight_price_2,
+                    "saved_2": saved_2,
+                    "flight_link_1": f"https://www.aviasales.ru/search/{search_route}1?marker={MARKER}",
+                    "flight_link_2": f"https://www.aviasales.ru/search/{search_route}2?marker={MARKER}",
+                    "hashtags": f"{orig_meta['tag']} {dest_info['tag']} #эксклюзивныйперелет"
+                })
+
+        time.sleep(1)
+
+    candidates.sort(key=lambda x: x["priority_score"], reverse=True)
+    sent_count = 0
+    used_routes = set()
+
+    for deal in candidates:
+        route_key = f"{deal['orig_name']}_{deal['dest_name']}"
+        if route_key in used_routes:
+            continue
+
+        html_text, buttons = build_tour_card(deal)
+        if send_to_max_channel(deal["photo"], html_text, buttons):
+            bot_state["sent_deals"].append(deal["deal_id"])
+            used_routes.add(route_key)
+            sent_count += 1
+            save_state(bot_state)
+            kind = "ПАКЕТНЫЙ ТУР" if deal["is_package_tour"] else "АВИАБИЛЕТ"
+            logger.info(f"✅ Опубликован [{kind}]: {deal['orig_name']} -> {deal['dest_name']} (-{deal['discount']}%)")
+            time.sleep(4)
+
+        if sent_count >= MAX_DEALS_PER_CYCLE:
+            break
+
+def background_worker():
+    while True:
+        try:
+            run_radar_cycle()
+        except Exception as e:
+            logger.error(f"Сбой цикла: {e}")
+        time.sleep(SCAN_INTERVAL)
+
+if __name__ == "__main__":
+    Thread(target=background_worker, daemon=True).start()
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
