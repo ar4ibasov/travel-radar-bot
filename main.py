@@ -20,7 +20,7 @@ MAX_BOT_TOKEN = os.getenv(
     "F9LHodD0cOLdtWyEzXzapwvtDXuI5ZMuw2xgW3QYS4rJB1PuFKtB41AvUxhR200ADiAAoVXob03ZN6IgLkWT"
 ).strip()
 
-MAX_CHAT_ID = os.getenv("MAX_CHAT_ID", "").strip()
+MAX_CHAT_ID = "-81280102401406"
 MAX_API_URLS = ["https://platform-api.max.ru", "https://botapi.max.ru"]
 
 TRAVELPAYOUTS_TOKEN = os.getenv("TRAVELPAYOUTS_TOKEN", "decbc99d1f0432b2043ff2075dcc8410")
