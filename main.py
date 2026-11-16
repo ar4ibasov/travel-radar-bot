@@ -3,6 +3,7 @@ import json as json_lib
 import time
 import random
 import logging
+from urllib.parse import quote
 from threading import Thread, Lock
 from datetime import datetime, date, timedelta, timezone
 import requests
@@ -73,125 +74,125 @@ AIRLINES = {
     "EK": "Emirates", "EY": "Etihad Airways", "UL": "SriLankan Airlines"
 }
 
-# --- 24 КУРОРТНЫХ НАПРАВЛЕНИЯ ---
+# --- 24 КУРОРТНЫХ НАПРАВЛЕНИЯ (с русскими названиями для Островка) ---
 CITY_DATA = {
     "HKT": {
-        "name": "Пхукет, Таиланд 🇹🇭", "en": "Phuket", "tag": "#Пхукет #Таиланд",
+        "name": "Пхукет, Таиланд 🇹🇭", "en": "Phuket", "city_ru": "Пхукет", "tag": "#Пхукет #Таиланд",
         "base_flight_rt": 58000, "hotel_base_2p": 4200, "meal": "Завтраки включены (BB)", "stars": "4★ Курортный отель",
         "photo": "https://images.unsplash.com/photo-1589394815804-964ed0be2eb5?auto=format&fit=crop&w=1200&q=85"
     },
     "BKK": {
-        "name": "Паттайя / Бангкок, Таиланд 🇹🇭", "en": "Bangkok", "tag": "#Таиланд #Паттайя",
+        "name": "Паттайя / Бангкок, Таиланд 🇹🇭", "en": "Bangkok", "city_ru": "Паттайя", "tag": "#Таиланд #Паттайя",
         "base_flight_rt": 54000, "hotel_base_2p": 3500, "meal": "Завтраки включены (BB)", "stars": "4★ Отель у моря",
         "photo": "https://images.unsplash.com/photo-1508009603885-50cf7c579365?auto=format&fit=crop&w=1200&q=85"
     },
     "CXR": {
-        "name": "Нячанг, Вьетнам 🇻🇳", "en": "Nha Trang", "tag": "#Нячанг #Вьетнам",
+        "name": "Нячанг, Вьетнам 🇻🇳", "en": "Nha Trang", "city_ru": "Нячанг", "tag": "#Нячанг #Вьетнам",
         "base_flight_rt": 56000, "hotel_base_2p": 3100, "meal": "Завтраки (BB)", "stars": "4★ Первая линия",
         "photo": "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1200&q=85"
     },
     "PQC": {
-        "name": "о. Фукуок, Вьетнам 🇻🇳", "en": "Phu Quoc", "tag": "#Фукуок #Вьетнам",
+        "name": "о. Фукуок, Вьетнам 🇻🇳", "en": "Phu Quoc", "city_ru": "Фукуок", "tag": "#Фукуок #Вьетнам",
         "base_flight_rt": 60000, "hotel_base_2p": 3900, "meal": "Завтраки (BB)", "stars": "4–5★ Пляжный резорт",
         "photo": "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=1200&q=85"
     },
     "AYT": {
-        "name": "Анталья / Кемер, Турция 🇹🇷", "en": "Antalya", "tag": "#Анталья #Турция",
+        "name": "Анталья / Кемер, Турция 🇹🇷", "en": "Antalya", "city_ru": "Анталья", "tag": "#Анталья #Турция",
         "base_flight_rt": 36000, "hotel_base_2p": 5800, "meal": "Всё включено (All Inclusive)", "stars": "4–5★ Курортный спа-отель",
         "photo": "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1200&q=85"
     },
     "IST": {
-        "name": "Стамбул, Турция 🇹🇷", "en": "Istanbul", "tag": "#Стамбул #Турция",
+        "name": "Стамбул, Турция 🇹🇷", "en": "Istanbul", "city_ru": "Стамбул", "tag": "#Стамбул #Турция",
         "base_flight_rt": 34000, "hotel_base_2p": 4600, "meal": "Завтраки (BB)", "stars": "4★ Исторический центр",
         "photo": "https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&w=1200&q=85"
     },
     "DLM": {
-        "name": "Мармарис / Фетхие, Турция 🇹🇷", "en": "Marmaris", "tag": "#Мармарис #Фетхие #Турция",
+        "name": "Мармарис / Фетхие, Турция 🇹🇷", "en": "Marmaris", "city_ru": "Мармарис", "tag": "#Мармарис #Фетхие #Турция",
         "base_flight_rt": 39000, "hotel_base_2p": 5500, "meal": "Всё включено (All Inclusive)", "stars": "4–5★ Отель в бухте",
         "photo": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=85"
     },
     "DXB": {
-        "name": "Дубай, ОАЭ 🇦🇪", "en": "Dubai", "tag": "#Дубай #ОАЭ",
+        "name": "Дубай, ОАЭ 🇦🇪", "en": "Dubai", "city_ru": "Дубай", "tag": "#Дубай #ОАЭ",
         "base_flight_rt": 40000, "hotel_base_2p": 6900, "meal": "Завтраки (BB)", "stars": "4★ Отель с бассейном",
         "photo": "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=85"
     },
     "SHJ": {
-        "name": "Шарджа, ОАЭ 🇦🇪", "en": "Sharjah", "tag": "#Шарджа #ОАЭ",
+        "name": "Шарджа, ОАЭ 🇦🇪", "en": "Sharjah", "city_ru": "Шарджа", "tag": "#Шарджа #ОАЭ",
         "base_flight_rt": 37000, "hotel_base_2p": 5200, "meal": "Завтрак + Ужин (HB)", "stars": "4★ Пляжный отель",
         "photo": "https://images.unsplash.com/photo-1580674684081-7617fbf3d745?auto=format&fit=crop&w=1200&q=85"
     },
     "AUH": {
-        "name": "Абу-Даби, ОАЭ 🇦🇪", "en": "Abu Dhabi", "tag": "#АбуДаби #ОАЭ",
+        "name": "Абу-Даби, ОАЭ 🇦🇪", "en": "Abu Dhabi", "city_ru": "Абу-Даби", "tag": "#АбуДаби #ОАЭ",
         "base_flight_rt": 38000, "hotel_base_2p": 6400, "meal": "Завтраки (BB)", "stars": "4–5★ Курорт на острове",
         "photo": "https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1200&q=85"
     },
     "SSH": {
-        "name": "Шарм-эль-Шейх, Египет 🇪🇬", "en": "Sharm El Sheikh", "tag": "#ШармЭльШейх #Египет",
+        "name": "Шарм-эль-Шейх, Египет 🇪🇬", "en": "Sharm El Sheikh", "city_ru": "Шарм-эль-Шейх", "tag": "#ШармЭльШейх #Египет",
         "base_flight_rt": 44000, "hotel_base_2p": 5600, "meal": "Всё включено (All Inclusive)", "stars": "4–5★ Коралловый риф",
         "photo": "https://images.unsplash.com/photo-1539650116574-8efeb43e2750?auto=format&fit=crop&w=1200&q=85"
     },
     "HRG": {
-        "name": "Хургада, Египет 🇪🇬", "en": "Hurghada", "tag": "#Хургада #Египет",
+        "name": "Хургада, Египет 🇪🇬", "en": "Hurghada", "city_ru": "Хургада", "tag": "#Хургада #Египет",
         "base_flight_rt": 42000, "hotel_base_2p": 5100, "meal": "Всё включено (All Inclusive)", "stars": "4–5★ Песчаный пляж",
         "photo": "https://images.unsplash.com/photo-1568322445074-8f8501e514e2?auto=format&fit=crop&w=1200&q=85"
     },
     "SYX": {
-        "name": "о. Хайнань (Санья), Китай 🇨🇳", "en": "Sanya", "tag": "#Хайнань #Китай",
+        "name": "о. Хайнань (Санья), Китай 🇨🇳", "en": "Sanya", "city_ru": "Санья", "tag": "#Хайнань #Китай",
         "base_flight_rt": 50000, "hotel_base_2p": 4800, "meal": "Завтраки (BB)", "stars": "4–5★ Тропический резорт",
         "photo": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=85"
     },
     "DPS": {
-        "name": "о. Бали, Индонезия 🇮🇩", "en": "Bali", "tag": "#Бали #Индонезия",
+        "name": "о. Бали, Индонезия 🇮🇩", "en": "Bali", "city_ru": "Бали", "tag": "#Бали #Индонезия",
         "base_flight_rt": 68000, "hotel_base_2p": 4500, "meal": "Завтраки (BB)", "stars": "4★ Вилла / Резорт с бассейном",
         "photo": "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1200&q=85"
     },
     "CMB": {
-        "name": "Шри-Ланка (Южное побережье) 🇱🇰", "en": "Colombo", "tag": "#ШриЛанка #Океан",
+        "name": "Шри-Ланка (Южное побережье) 🇱🇰", "en": "Colombo", "city_ru": "Унаватуна", "tag": "#ШриЛанка #Океан",
         "base_flight_rt": 56000, "hotel_base_2p": 3700, "meal": "Завтраки (BB)", "stars": "4★ Отель у океана",
         "photo": "https://images.unsplash.com/photo-1546708973-b339540b5162?auto=format&fit=crop&w=1200&q=85"
     },
     "MLE": {
-        "name": "Мальдивские острова 🇲🇻", "en": "Male", "tag": "#Мальдивы #РайскийОтдых",
+        "name": "Мальдивские острова 🇲🇻", "en": "Male", "city_ru": "Мальдивы", "tag": "#Мальдивы #РайскийОтдых",
         "base_flight_rt": 66000, "hotel_base_2p": 6800, "meal": "Завтрак + Ужин (HB)", "stars": "4★ Пляжный гестхаус / Резорт",
         "photo": "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&w=1200&q=85"
     },
     "GOI": {
-        "name": "Гоа, Индия 🇮🇳", "en": "Goa", "tag": "#Гоа #Индия",
+        "name": "Гоа, Индия 🇮🇳", "en": "Goa", "city_ru": "Гоа", "tag": "#Гоа #Индия",
         "base_flight_rt": 49000, "hotel_base_2p": 3200, "meal": "Завтраки (BB)", "stars": "4★ Курорт у пляжа",
         "photo": "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=1200&q=85"
     },
     "AER": {
-        "name": "Сочи и Красная Поляна, Россия 🇷🇺", "en": "Sochi", "tag": "#Сочи #ЧерноеМоре",
+        "name": "Сочи и Красная Поляна, Россия 🇷🇺", "en": "Sochi", "city_ru": "Сочи", "tag": "#Сочи #ЧерноеМоре",
         "base_flight_rt": 21000, "hotel_base_2p": 3800, "meal": "Завтраки (BB)", "stars": "4★ Отель у побережья",
         "photo": "https://images.unsplash.com/photo-1569683795645-b62e50fbf103?auto=format&fit=crop&w=1200&q=85"
     },
     "KGD": {
-        "name": "Калининград и Балтика 🇷🇺", "en": "Kaliningrad", "tag": "#Калининград #Балтика",
+        "name": "Калининград и Балтика 🇷🇺", "en": "Kaliningrad", "city_ru": "Калининград", "tag": "#Калининград #Балтика",
         "base_flight_rt": 19000, "hotel_base_2p": 3600, "meal": "Завтраки (BB)", "stars": "4★ Бутик-отель",
         "photo": "https://images.unsplash.com/photo-1505761671935-60b3a7427bad?auto=format&fit=crop&w=1200&q=85"
     },
     "MRV": {
-        "name": "Кисловодск и Кавминводы 🇷🇺", "en": "Kislovodsk", "tag": "#Кисловодск #Кавказ",
+        "name": "Кисловодск и Кавминводы 🇷🇺", "en": "Kislovodsk", "city_ru": "Кисловодск", "tag": "#Кисловодск #Кавказ",
         "base_flight_rt": 22000, "hotel_base_2p": 3900, "meal": "Завтрак + спа (BB)", "stars": "4★ Парк-отель / Санаторий",
         "photo": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=85"
     },
     "MCX": {
-        "name": "Дагестан (Каспий и горы) 🇷🇺", "en": "Makhachkala", "tag": "#Дагестан #КаспийскоеМоре",
+        "name": "Дагестан (Каспий и горы) 🇷🇺", "en": "Makhachkala", "city_ru": "Дербент", "tag": "#Дагестан #КаспийскоеМоре",
         "base_flight_rt": 21000, "hotel_base_2p": 3500, "meal": "Завтраки (BB)", "stars": "4★ Отель у моря",
         "photo": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=85"
     },
     "TBS": {
-        "name": "Тбилиси, Грузия 🇬🇪", "en": "Tbilisi", "tag": "#Тбилиси #Грузия",
+        "name": "Тбилиси, Грузия 🇬🇪", "en": "Tbilisi", "city_ru": "Тбилиси", "tag": "#Тбилиси #Грузия",
         "base_flight_rt": 32000, "hotel_base_2p": 4100, "meal": "Завтраки (BB)", "stars": "4★ Отель в Старом городе",
         "photo": "https://images.unsplash.com/photo-1565008576549-57569a49371d?auto=format&fit=crop&w=1200&q=85"
     },
     "EVN": {
-        "name": "Ереван, Армения 🇦🇲", "en": "Yerevan", "tag": "#Ереван #Армения",
+        "name": "Ереван, Армения 🇦🇲", "en": "Yerevan", "city_ru": "Ереван", "tag": "#Ереван #Армения",
         "base_flight_rt": 28000, "hotel_base_2p": 3900, "meal": "Завтраки (BB)", "stars": "4★ Отель в центре",
         "photo": "https://images.unsplash.com/photo-1589561454226-796a8aa89b05?auto=format&fit=crop&w=1200&q=85"
     },
     "TAS": {
-        "name": "Ташкент и Самарканд, Узбекистан 🇺🇿", "en": "Tashkent", "tag": "#Узбекистан #Самарканд",
+        "name": "Ташкент и Самарканд, Узбекистан 🇺🇿", "en": "Tashkent", "city_ru": "Самарканд", "tag": "#Узбекистан #Самарканд",
         "base_flight_rt": 29000, "hotel_base_2p": 3600, "meal": "Завтраки (BB)", "stars": "4★ Восточный бутик-отель",
         "photo": "https://images.unsplash.com/photo-1580655653885-65763b2597d0?auto=format&fit=crop&w=1200&q=85"
     }
@@ -856,6 +857,12 @@ def fetch_hotel_stay_price(city_en, check_in, check_out, fallback_per_night, nig
         pass
     return int(fallback_per_night * nights)
 
+def build_russian_hotel_link(dest_info, dep_date, ret_date):
+    """Формирует рабочую ссылку на Островок (работает в РФ и принимает карты Мир/СБП)."""
+    city_ru = dest_info.get("city_ru") or dest_info["name"].split(",")[0].strip()
+    dates_str = f"{dep_date.strftime('%d.%m.%Y')}-{ret_date.strftime('%d.%m.%Y')}"
+    return f"https://ostrovok.ru/hotel/search/?q={quote(city_ru)}&dates={dates_str}&guests=2"
+
 def build_tour_card(d):
     is_hot = d["days_left"] <= HOT_DAYS_THRESHOLD
     if d["discount"] >= 28:
@@ -983,7 +990,7 @@ def publish_single_tour_post():
                 "hotel_stay_2": hotel_stay_2,
                 "flight_price_2": flight_price_2,
                 "saved_2": tour_avg_2 - tour_price_2,
-                "hotel_link": f"https://search.hotellook.com/?destination={dest_info['en']}&checkIn={dep_at}&checkOut={ret_at}&adults=2&marker={MARKER}&language=ru",
+                "hotel_link": build_russian_hotel_link(dest_info, dep_date, ret_date),
                 "flight_link_2": f"https://www.aviasales.ru/search/{search_route}2?marker={MARKER}",
                 "hashtags": f"{orig_meta['tag']} {dest_info['tag']} #пакетныйтур #отпускподключ"
             })
@@ -1008,7 +1015,6 @@ def publish_single_tour_post():
     return False
 
 def publish_editorial_post(pool_name):
-    """Публикует экспертный пост с привязкой к дню года, чтобы статьи не повторялись даже после перезагрузки Render."""
     posts_list = EDITORIAL_POSTS.get(pool_name, EDITORIAL_POSTS["morning"])
     day_of_year = datetime.now(LOCAL_TZ).timetuple().tm_yday
     offset = bot_state.get("editorial_offset", {}).get(pool_name, 0)
@@ -1031,7 +1037,6 @@ def publish_editorial_post(pool_name):
     return False
 
 def evaluate_schedule():
-    """Проверяет расписание из 7 слотов и публикует очередной пост, если пришло его время."""
     if not cycle_lock.acquire(blocking=False):
         return
 
