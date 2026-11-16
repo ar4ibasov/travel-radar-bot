@@ -3,6 +3,7 @@ import json as json_lib
 import time
 import random
 import logging
+from urllib.parse import quote
 from threading import Thread, Lock
 from datetime import datetime, date, timedelta, timezone
 import requests
@@ -24,12 +25,12 @@ MAX_CHAT_ID = os.getenv("MAX_CHAT_ID", "-81280102401406").strip()
 MAX_API_URLS = ["https://platform-api.max.ru", "https://botapi.max.ru"]
 
 TRAVELPAYOUTS_TOKEN = os.getenv("TRAVELPAYOUTS_TOKEN", "decbc99d1f0432b2043ff2075dcc8410")
-MARKER = os.getenv("MARKER", "805655")
+MARKER = "805655"
 
 CHANNEL_LINK = "https://max.ru/se15023987_biz"
 CACHE_FILE = "max_radar_state.json"
 
-LOCAL_TZ = timezone(timedelta(hours=5))  # UTC+5
+LOCAL_TZ = timezone(timedelta(hours=5))  # UTC+5 (ХМАО / Тюмень / Екатеринбург)
 CHECK_INTERVAL = 300                     # Проверка расписания каждые 5 минут
 MAX_DAYS_AHEAD = 90
 HOT_DAYS_THRESHOLD = 14
@@ -73,7 +74,7 @@ AIRLINES = {
     "EK": "Emirates", "EY": "Etihad Airways", "UL": "SriLankan Airlines"
 }
 
-# --- 24 КУРОРТНЫХ НАПРАВЛЕНИЯ (с прямыми путями ostrovok_path на латинице) ---
+# --- 24 КУРОРТНЫХ НАПРАВЛЕНИЯ ---
 CITY_DATA = {
     "HKT": {
         "name": "Пхукет, Таиланд 🇹🇭", "en": "Phuket", "ostrovok_path": "thailand/phuket", "tag": "#Пхукет #Таиланд",
@@ -858,12 +859,15 @@ def fetch_hotel_stay_price(city_en, check_in, check_out, fallback_per_night, nig
     return int(fallback_per_night * nights)
 
 def build_russian_hotel_link(dest_info, dep_date, ret_date):
-    """Формирует прямую ASCII-ссылку на страницу курорта в Островке без кириллицы и редиректов."""
+    """Формирует партнерскую ссылку tp.media/r для Островка с пробросом дат и курорта."""
     path = dest_info.get("ostrovok_path", "russia/sochi")
     dates_str = f"{dep_date.strftime('%d.%m.%Y')}-{ret_date.strftime('%d.%m.%Y')}"
-    url = f"https://ostrovok.ru/hotel/{path}/?dates={dates_str}&guests=2"
-    diag_info["last_hotel_url"] = url
-    return url
+    target_url = f"https://ostrovok.ru/hotel/{path}/?dates={dates_str}&guests=2"
+    
+    # Обертка в ваш партнерский трекер Travelpayouts (маркер 805655, оффер Островка p=4115)
+    affiliate_url = f"https://tp.media/r?marker={MARKER}&p=4115&u={quote(target_url, safe='')}"
+    diag_info["last_hotel_url"] = affiliate_url
+    return affiliate_url
 
 def build_tour_card(d):
     is_hot = d["days_left"] <= HOT_DAYS_THRESHOLD
