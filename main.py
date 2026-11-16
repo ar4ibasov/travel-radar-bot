@@ -6,7 +6,7 @@ import logging
 from threading import Thread
 from datetime import datetime, date, timedelta, timezone
 import requests
-from flask import Flask
+from flask import Flask, redirect
 
 # --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
 logging.basicConfig(
@@ -20,31 +20,31 @@ logger = logging.getLogger("MaxTravelEngine")
 MAX_BOT_TOKEN = os.getenv(
     "MAX_BOT_TOKEN",
     "F9LHodD0cOLdtWyEzXzapwvtDXuI5ZMuw2xgW3QYS4rJB1PuFKtB41AvUxhR200ADiAAoVXob03ZN6IgLkWT"
-)
-# Оставьте пустым для автоопределения канала или укажите числовой ID вручную
-MAX_CHAT_ID = os.getenv("MAX_CHAT_ID", "")
-MAX_API_BASE = "https://botapi.max.ru"
+).strip()
+
+MAX_CHAT_ID = os.getenv("MAX_CHAT_ID", "").strip()
+MAX_API_URLS = ["https://botapi.max.ru", "https://platform-api.max.ru"]
 
 TRAVELPAYOUTS_TOKEN = os.getenv("TRAVELPAYOUTS_TOKEN", "decbc99d1f0432b2043ff2075dcc8410")
 MARKER = os.getenv("MARKER", "805655")
 
-CHANNEL_LINK = "https://max.ru/channel_radar_travel"
+# Новая официальная ссылка на ваш бизнес-канал в MAX
+CHANNEL_LINK = "https://max.ru/se15023987_biz"
 CACHE_FILE = "max_radar_state.json"
 
 # --- НАСТРОЙКИ РАСПИСАНИЯ И ФИЛЬТРОВ ---
-LOCAL_TZ = timezone(timedelta(hours=5))  # UTC+5 (ХМАО / Тюмень / Екатеринбург)
-SCAN_INTERVAL = 2400                     # Проверка туров каждые 40 минут
-MAX_DEALS_PER_CYCLE = 3                  # До 3 лучших предложений за цикл
-MAX_DAYS_AHEAD = 90                      # Горизонт поиска до 3 месяцев
-HOT_DAYS_THRESHOLD = 14                  # До 14 дней — горящий тур
-MIN_TOUR_DISCOUNT = 15                   # Минимальная выгода для пакетных туров (%)
-MIN_FLIGHT_DISCOUNT = 26                 # Повышенный порог для отдельных билетов (%)
+LOCAL_TZ = timezone(timedelta(hours=5))  # UTC+5
+SCAN_INTERVAL = 2400                     # 40 минут
+MAX_DEALS_PER_CYCLE = 3
+MAX_DAYS_AHEAD = 90
+HOT_DAYS_THRESHOLD = 14
+MIN_TOUR_DISCOUNT = 14
+MIN_FLIGHT_DISCOUNT = 25
 
-# Часы выхода редакционных постов (по времени UTC+5)
 EDITORIAL_SLOTS = {
-    "morning": 9,     # 09:00 — Утренний гид
-    "afternoon": 14,  # 14:00 — Памятка туриста и полезные советы
-    "evening": 19     # 19:00 — Вечерняя подборка локаций
+    "morning": 9,     # 09:00–09:59
+    "afternoon": 14,  # 14:00–14:59
+    "evening": 19     # 19:00–19:59
 }
 
 ORIGINS = {
@@ -250,11 +250,16 @@ DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
 session = requests.Session()
 app = Flask(__name__)
-resolved_chat_id = None
 
-@app.route("/")
-def health_check():
-    return "MAX Travel Radar Engine is active 24/7!", 200
+# Диагностический журнал для просмотра прямо с телефона
+diag_info = {
+    "active_api": MAX_API_URLS[0],
+    "found_chats": [],
+    "selected_chat_id": None,
+    "selected_chat_title": None,
+    "last_send_status": "Ожидание первой отправки...",
+    "posts_sent_count": 0
+}
 
 def load_state():
     default_state = {
@@ -280,38 +285,76 @@ def save_state(state):
 
 bot_state = load_state()
 
-# --- АВТООПРЕДЕЛЕНИЕ КАНАЛА И ЗАГРУЗКА КАРТИНОК В MAX API ---
-def get_target_chat_id():
-    global resolved_chat_id
-    if MAX_CHAT_ID and str(MAX_CHAT_ID).strip():
-        return str(MAX_CHAT_ID).strip()
-    if resolved_chat_id:
-        return resolved_chat_id
+# --- ПОИСК АКТИВНОГО КАНАЛА В MAX API ---
+def discover_target_chat(force_refresh=False):
+    if MAX_CHAT_ID:
+        diag_info["selected_chat_id"] = MAX_CHAT_ID
+        return MAX_CHAT_ID
+
+    if diag_info["selected_chat_id"] and not force_refresh:
+        return diag_info["selected_chat_id"]
 
     headers = {"Authorization": MAX_BOT_TOKEN}
-    params = {"access_token": MAX_BOT_TOKEN}
-    try:
-        res = session.get(f"{MAX_API_BASE}/chats", headers=headers, params=params, timeout=12)
-        if res.status_code == 200:
-            chats = res.json().get("chats", [])
-            for chat in chats:
-                if chat.get("type") in ("channel", "chat"):
-                    resolved_chat_id = str(chat.get("chat_id"))
-                    logger.info(f"🎯 Автоматически найден канал MAX: '{chat.get('title')}' (ID: {resolved_chat_id})")
-                    return resolved_chat_id
-            logger.warning("⚠️ Бот еще не видит каналов. Добавьте бота администратором в ваш канал MAX!")
-        else:
-            logger.error(f"Ошибка получения чатов MAX ({res.status_code}): {res.text}")
-    except Exception as e:
-        logger.error(f"Сбой подключения к /chats MAX API: {e}")
+    params = {"access_token": MAX_BOT_TOKEN, "count": 50}
+
+    for base_url in MAX_API_URLS:
+        try:
+            res = session.get(f"{base_url}/chats", headers=headers, params=params, timeout=12)
+            if res.status_code == 200:
+                diag_info["active_api"] = base_url
+                chats = res.json().get("chats", [])
+                diag_info["found_chats"] = [
+                    {
+                        "chat_id": c.get("chat_id"),
+                        "title": c.get("title"),
+                        "type": c.get("type"),
+                        "status": c.get("status")
+                    }
+                    for c in chats
+                ]
+
+                # Сначала ищем активный канал с названием "Радар"
+                active_channels = [
+                    c for c in chats
+                    if c.get("status") in ("active", None) and c.get("type") in ("channel", "chat")
+                ]
+                for c in active_channels:
+                    title = (c.get("title") or "").lower()
+                    if "радар" in title or "горящие" in title:
+                        cid = str(c.get("chat_id"))
+                        diag_info["selected_chat_id"] = cid
+                        diag_info["selected_chat_title"] = c.get("title")
+                        logger.info(f"🎯 Найден целевой канал MAX: '{c.get('title')}' (ID: {cid})")
+                        return cid
+
+                # Иначе берем самый свежий активный канал
+                for c in active_channels:
+                    if c.get("type") == "channel":
+                        cid = str(c.get("chat_id"))
+                        diag_info["selected_chat_id"] = cid
+                        diag_info["selected_chat_title"] = c.get("title")
+                        logger.info(f"🎯 Выбран активный канал MAX: '{c.get('title')}' (ID: {cid})")
+                        return cid
+
+                if active_channels:
+                    cid = str(active_channels[0].get("chat_id"))
+                    diag_info["selected_chat_id"] = cid
+                    diag_info["selected_chat_title"] = active_channels[0].get("title")
+                    return cid
+
+                diag_info["last_send_status"] = "Список чатов пуст. Проверьте, что именно этот бот добавлен в администраторы канала."
+        except Exception as e:
+            diag_info["last_send_status"] = f"Ошибка /chats ({base_url}): {e}"
+            logger.error(diag_info["last_send_status"])
+
     return None
 
 def upload_image_to_max(photo_url):
-    """Загружает фото в MAX API (/uploads) и возвращает готовый payload."""
+    base_url = diag_info["active_api"]
     headers = {"Authorization": MAX_BOT_TOKEN}
     params = {"access_token": MAX_BOT_TOKEN, "type": "image"}
     try:
-        up_init = session.post(f"{MAX_API_BASE}/uploads", headers=headers, params=params, timeout=10)
+        up_init = session.post(f"{base_url}/uploads", headers=headers, params=params, timeout=10)
         if up_init.status_code == 200:
             upload_url = up_init.json().get("url")
             if upload_url:
@@ -320,17 +363,22 @@ def upload_image_to_max(photo_url):
                     files = {"data": ("cover.jpg", img_resp.content, "image/jpeg")}
                     up_done = session.post(upload_url, files=files, timeout=20)
                     if up_done.status_code == 200:
+                        # Даем серверу MAX 2 секунды на обработку загруженного фото
+                        time.sleep(2.0)
                         return up_done.json()
     except Exception as e:
-        logger.warning(f"Не удалось загрузить фото через /uploads, используем прямую ссылку: {e}")
+        logger.warning(f"Ошибка загрузки фото через /uploads: {e}")
     return {"url": photo_url}
 
 def send_to_max_channel(photo_url, html_text, buttons=None):
-    target_chat = get_target_chat_id()
+    target_chat = discover_target_chat(force_refresh=False)
+    if not target_chat:
+        target_chat = discover_target_chat(force_refresh=True)
     if not target_chat:
         return False
 
-    url = f"{MAX_API_BASE}/messages"
+    base_url = diag_info["active_api"]
+    url = f"{base_url}/messages"
     headers = {"Authorization": MAX_BOT_TOKEN}
     params = {"access_token": MAX_BOT_TOKEN, "chat_id": target_chat}
 
@@ -347,13 +395,45 @@ def send_to_max_channel(photo_url, html_text, buttons=None):
         "attachments": attachments
     }
 
+    # Попытка 1: Полная карточка с загруженным фото и кнопками (с повтором при attachment.not.ready)
+    for attempt in range(3):
+        try:
+            res = session.post(url, headers=headers, params=params, json=payload, timeout=15)
+            if res.status_code in (200, 201):
+                diag_info["last_send_status"] = f"Успешно отправлено в {diag_info['selected_chat_title']} ({datetime.now(LOCAL_TZ).strftime('%H:%M:%S')})"
+                diag_info["posts_sent_count"] += 1
+                return True
+            if "attachment.not.ready" in res.text and attempt < 2:
+                time.sleep(2.5)
+                continue
+            diag_info["last_send_status"] = f"Ответ MAX ({res.status_code}): {res.text}"
+            logger.warning(diag_info["last_send_status"])
+            break
+        except Exception as e:
+            diag_info["last_send_status"] = f"Ошибка соединения: {e}"
+            break
+
+    # Попытка 2: Если чат устарел (404/403), обновляем список каналов, а если ошибка во вложении — шлем текст с кнопками
+    discover_target_chat(force_refresh=True)
+    fallback_attachments = []
+    if buttons:
+        inline_rows = [[{"type": "link", "text": b["text"], "url": b["url"]}] for b in buttons]
+        fallback_attachments.append({"type": "inline_keyboard", "payload": {"buttons": inline_rows}})
+
+    fallback_payload = {
+        "text": html_text,
+        "format": "html",
+        "attachments": fallback_attachments
+    }
     try:
-        res = session.post(url, headers=headers, params=params, json=payload, timeout=15)
-        if res.status_code in (200, 201):
+        res2 = session.post(url, headers=headers, params=params, json=fallback_payload, timeout=15)
+        if res2.status_code in (200, 201):
+            diag_info["last_send_status"] = f"Отправлено (без фото) в {diag_info['selected_chat_title']}"
+            diag_info["posts_sent_count"] += 1
             return True
-        logger.error(f"Ошибка отправки в MAX ({res.status_code}): {res.text}")
-    except Exception as e:
-        logger.error(f"Ошибка соединения с MAX API: {e}")
+    except Exception:
+        pass
+
     return False
 
 # --- ФОРМАТИРОВАНИЕ ---
@@ -477,38 +557,50 @@ def build_tour_card(d):
 
     return text, buttons
 
-def check_and_publish_editorial():
+def publish_editorial_post(slot_name, force=False):
     now_local = datetime.now(LOCAL_TZ)
     today_str = now_local.strftime("%Y-%m-%d")
-    current_hour = now_local.hour
+    log_key = f"{today_str}_{slot_name}"
 
+    if not force and bot_state["editorial_log"].get(log_key):
+        return False
+
+    posts_list = EDITORIAL_POSTS[slot_name]
+    idx = bot_state["editorial_index"].get(slot_name, 0) % len(posts_list)
+    post = posts_list[idx]
+
+    html_text = (
+        f"{post['badge']}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>{post['title']}</b>\n\n"
+        f"{post['body']}\n"
+        f"━━━━━━━━━━━━━━━━━━━\n"
+        f"💡 <b>Совет Радара:</b> <i>{post['tip']}</i>\n\n"
+        f"{post['tags']} #радарпутешествий"
+    )
+    buttons = [{"text": "📡 Подписаться на Радар Путешествий", "url": CHANNEL_LINK}]
+
+    if send_to_max_channel(post["photo"], html_text, buttons):
+        bot_state["editorial_log"][log_key] = True
+        bot_state["editorial_index"][slot_name] = idx + 1
+        save_state(bot_state)
+        logger.info(f"📰 Опубликован редакционный пост [{slot_name}]: {post['title']}")
+        return True
+    return False
+
+def check_and_publish_editorial():
+    current_hour = datetime.now(LOCAL_TZ).hour
     for slot_name, target_hour in EDITORIAL_SLOTS.items():
-        log_key = f"{today_str}_{slot_name}"
-        if current_hour == target_hour and not bot_state["editorial_log"].get(log_key):
-            posts_list = EDITORIAL_POSTS[slot_name]
-            idx = bot_state["editorial_index"].get(slot_name, 0) % len(posts_list)
-            post = posts_list[idx]
-
-            html_text = (
-                f"{post['badge']}\n"
-                f"━━━━━━━━━━━━━━━━━━━\n"
-                f"<b>{post['title']}</b>\n\n"
-                f"{post['body']}\n"
-                f"━━━━━━━━━━━━━━━━━━━\n"
-                f"💡 <b>Совет Радара:</b> <i>{post['tip']}</i>\n\n"
-                f"{post['tags']} #радарпутешествий"
-            )
-            buttons = [{"text": "📡 Поделиться каналом в MAX", "url": CHANNEL_LINK}]
-
-            if send_to_max_channel(post["photo"], html_text, buttons):
-                bot_state["editorial_log"][log_key] = True
-                bot_state["editorial_index"][slot_name] = idx + 1
-                save_state(bot_state)
-                logger.info(f"📰 Опубликован редакционный пост [{slot_name}]: {post['title']}")
-                time.sleep(5)
+        if current_hour == target_hour:
+            publish_editorial_post(slot_name, force=False)
 
 def run_radar_cycle():
+    discover_target_chat(force_refresh=True)
     check_and_publish_editorial()
+
+    # Если за всё время работы еще не отправлено ни одного поста — сразу шлем приветственный утренний гид для проверки канала!
+    if diag_info["posts_sent_count"] == 0:
+        publish_editorial_post("morning", force=True)
 
     logger.info("📡 Сканирование пакетных туров и эксклюзивных перелетов...")
     today = date.today()
@@ -655,7 +747,7 @@ def run_radar_cycle():
                     "hashtags": f"{orig_meta['tag']} {dest_info['tag']} #эксклюзивныйперелет"
                 })
 
-        time.sleep(1)
+        time.sleep(0.5)
 
     candidates.sort(key=lambda x: x["priority_score"], reverse=True)
     sent_count = 0
@@ -672,12 +764,41 @@ def run_radar_cycle():
             used_routes.add(route_key)
             sent_count += 1
             save_state(bot_state)
-            kind = "ПАКЕТНЫЙ ТУР" if deal["is_package_tour"] else "АВИАБИЛЕТ"
-            logger.info(f"✅ Опубликован [{kind}]: {deal['orig_name']} -> {deal['dest_name']} (-{deal['discount']}%)")
             time.sleep(4)
 
         if sent_count >= MAX_DEALS_PER_CYCLE:
             break
+
+# --- ВЕБ-ПУЛЬТ УПРАВЛЕНИЯ И ДИАГНОСТИКИ ---
+@app.route("/")
+def dashboard():
+    discover_target_chat(force_refresh=True)
+    chats_html = "".join(
+        f"<li><b>{c['title']}</b> — ID: <code>{c['chat_id']}</code> (тип: {c['type']}, статус: {c['status']})</li>"
+        for c in diag_info["found_chats"]
+    ) or "<li>Каналы пока не обнаружены. Проверьте, тот ли токен бота указан в коде.</li>"
+
+    return f"""
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Пульт Радара Путешествий MAX</title></head>
+    <body style="font-family: sans-serif; padding: 20px; background: #121212; color: #f0f0f0;">
+        <h2>📡 Пульт управления: Радар Путешествий (MAX)</h2>
+        <p><b>Выбранный канал:</b> {diag_info['selected_chat_title'] or 'Не выбран'} (ID: <code>{diag_info['selected_chat_id']}</code>)</p>
+        <p><b>Опубликовано постов с момента запуска:</b> {diag_info['posts_sent_count']}</p>
+        <p><b>Последний статус отправки:</b> <code>{diag_info['last_send_status']}</code></p>
+        <p><a href="/send_now" style="display:inline-block; padding:12px 20px; background:#2b7de9; color:#fff; text-decoration:none; border-radius:8px; font-weight:bold;">🚀 Опубликовать пост прямо сейчас</a></p>
+        <hr style="border-color:#333;">
+        <h3>Каналы, которые видит бот:</h3>
+        <ul>{chats_html}</ul>
+    </body>
+    </html>
+    """, 200
+
+@app.route("/send_now")
+def trigger_send_now():
+    Thread(target=lambda: publish_editorial_post("morning", force=True), daemon=True).start()
+    return redirect("/")
 
 def background_worker():
     while True:
