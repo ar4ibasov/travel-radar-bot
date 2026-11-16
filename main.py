@@ -15,12 +15,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("MaxTravelEngine")
 
-MAX_BOT_TOKEN = os.getenv(
-    "MAX_BOT_TOKEN",
-    "F9LHodD0cOLdtWyEzXzapwvtDXuI5ZMuw2xgW3QYS4rJB1PuFKtB41AvUxhR200ADiAAoVXob03ZN6IgLkWT"
-).strip()
-
+# Жестко фиксируем рабочий токен и ID вашего канала в MAX
+MAX_BOT_TOKEN = "F9LHodD0cOKKyq5NS6jf921Uz0yHO2YyMY2NxT-IuC6D0kJPOxOXbUUuX1D1lVcPc8XKbyKsv7rAQI5yhH9p"
 MAX_CHAT_ID = "-81280102401406"
+
 MAX_API_URLS = ["https://platform-api.max.ru", "https://botapi.max.ru"]
 
 TRAVELPAYOUTS_TOKEN = os.getenv("TRAVELPAYOUTS_TOKEN", "decbc99d1f0432b2043ff2075dcc8410")
@@ -189,17 +187,13 @@ app = Flask(__name__)
 diag_info = {
     "active_api": MAX_API_URLS[0],
     "bot_profile": "Проверяется...",
-    "found_chats": [],
-    "selected_chat_id": MAX_CHAT_ID or None,
-    "selected_chat_title": None,
     "last_api_debug": "Ожидание запроса...",
     "last_send_status": "Ожидание отправки...",
-    "posts_sent_count": 0,
-    "raw_updates": []
+    "posts_sent_count": 0
 }
 
 def load_state():
-    default_state = {"sent_deals": [], "editorial_log": {}, "editorial_index": {"morning": 0, "afternoon": 0, "evening": 0}, "custom_token": "", "custom_chat_id": ""}
+    default_state = {"sent_deals": [], "editorial_log": {}, "editorial_index": {"morning": 0, "afternoon": 0, "evening": 0}}
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r", encoding="utf-8") as f:
@@ -218,11 +212,8 @@ def save_state(state):
 
 bot_state = load_state()
 
-def get_active_token():
-    return (bot_state.get("custom_token") or MAX_BOT_TOKEN).strip()
-
 def max_api_request(method, path, params=None, json_data=None, files=None, timeout=12):
-    token = get_active_token()
+    token = MAX_BOT_TOKEN
     params = dict(params or {})
     for base_url in MAX_API_URLS:
         headers_a = {"Authorization": token}
@@ -257,44 +248,6 @@ def check_bot_identity():
     else:
         diag_info["bot_profile"] = f"Ошибка токена! ({diag_info['last_api_debug']})"
 
-def discover_target_chat(force_refresh=False):
-    manual_cid = (bot_state.get("custom_chat_id") or MAX_CHAT_ID).strip()
-    if manual_cid:
-        diag_info["selected_chat_id"] = manual_cid
-        diag_info["selected_chat_title"] = "Задан вручную"
-        return manual_cid
-
-    if diag_info["selected_chat_id"] and not force_refresh:
-        return diag_info["selected_chat_id"]
-
-    check_bot_identity()
-    discovered = []
-
-    res_upd = max_api_request("GET", "/updates", params={"limit": 30, "timeout": 1})
-    if res_upd:
-        updates = res_upd.json().get("updates", [])
-        diag_info["raw_updates"] = updates
-        for u in updates:
-            cid = u.get("chat_id")
-            if not cid and isinstance(u.get("message"), dict):
-                rec = u["message"].get("recipient", {})
-                cid = rec.get("chat_id")
-            if not cid and isinstance(u.get("callback_query"), dict):
-                cid = u["callback_query"].get("chat_id")
-            if cid is not None and not any(d["chat_id"] == str(cid) for d in discovered):
-                discovered.append({
-                    "chat_id": str(cid),
-                    "title": f"Канал/Чат (тип: {u.get('update_type', 'msg')})"
-                })
-
-    diag_info["found_chats"] = discovered
-    if discovered:
-        diag_info["selected_chat_id"] = discovered[0]["chat_id"]
-        diag_info["selected_chat_title"] = discovered[0]["title"]
-        return discovered[0]["chat_id"]
-
-    return None
-
 def upload_image_to_max(photo_url):
     up_init = max_api_request("POST", "/uploads", params={"type": "image"})
     if up_init:
@@ -313,9 +266,9 @@ def upload_image_to_max(photo_url):
     return {"url": photo_url}
 
 def send_to_max_channel(photo_url, html_text, buttons=None):
-    target_chat = discover_target_chat(force_refresh=True)
+    target_chat = MAX_CHAT_ID
     if not target_chat:
-        diag_info["last_send_status"] = "❌ Ошибка: не найден chat_id. Напишите сообщение в канал MAX или введите ID вручную ниже."
+        diag_info["last_send_status"] = "❌ Ошибка: не задан MAX_CHAT_ID."
         return False
 
     img_payload = upload_image_to_max(photo_url)
@@ -332,7 +285,6 @@ def send_to_max_channel(photo_url, html_text, buttons=None):
         diag_info["posts_sent_count"] += 1
         return True
 
-    # Резерв без картинки
     res2 = max_api_request("POST", "/messages", params={"chat_id": target_chat}, json_data={"text": html_text, "format": "html"}, timeout=15)
     if res2:
         diag_info["last_send_status"] = f"✅ Опубликовано (текст) в ID {target_chat}"
@@ -346,13 +298,10 @@ def format_price(value):
     return f"{int(value):,}".replace(",", " ")
 
 def pluralize_nights(n):
-    if 11 <= n % 100 <= 19:
-        return f"{n} ночей"
+    if 11 <= n % 100 <= 19: return f"{n} ночей"
     rem = n % 10
-    if rem == 1:
-        return f"{n} ночь"
-    if 2 <= rem <= 4:
-        return f"{n} ночи"
+    if rem == 1: return f"{n} ночь"
+    if 2 <= rem <= 4: return f"{n} ночи"
     return f"{n} ночей"
 
 def format_transfers(count):
@@ -368,10 +317,8 @@ def fetch_flights(origin_code, one_way="false"):
     params = {"origin": origin_code, "currency": "rub", "sorting": "price", "one_way": one_way, "limit": 100, "token": TRAVELPAYOUTS_TOKEN}
     try:
         res = session.get(url, params=params, timeout=15)
-        if res.status_code == 200:
-            return res.json().get("data", [])
-    except Exception:
-        pass
+        if res.status_code == 200: return res.json().get("data", [])
+    except Exception: pass
     return []
 
 def fetch_hotel_stay_price(city_en, check_in, check_out, fallback_per_night, nights):
@@ -384,8 +331,7 @@ def fetch_hotel_stay_price(city_en, check_in, check_out, fallback_per_night, nig
             if isinstance(hotels, list) and hotels:
                 prices = [h.get("priceFrom") for h in hotels if h.get("priceFrom")]
                 if prices: return int(min(prices))
-    except Exception:
-        pass
+    except Exception: pass
     return int(fallback_per_night * nights)
 
 def build_tour_card(d):
@@ -428,8 +374,7 @@ def build_tour_card(d):
 def publish_editorial_post(slot_name, force=False):
     now_local = datetime.now(LOCAL_TZ)
     log_key = f"{now_local.strftime('%Y-%m-%d')}_{slot_name}"
-    if not force and bot_state["editorial_log"].get(log_key):
-        return False
+    if not force and bot_state["editorial_log"].get(log_key): return False
 
     posts_list = EDITORIAL_POSTS[slot_name]
     idx = bot_state["editorial_index"].get(slot_name, 0) % len(posts_list)
@@ -451,11 +396,10 @@ def publish_editorial_post(slot_name, force=False):
     return False
 
 def run_radar_cycle():
-    discover_target_chat(force_refresh=True)
+    check_bot_identity()
     current_hour = datetime.now(LOCAL_TZ).hour
     for slot_name, target_hour in EDITORIAL_SLOTS.items():
-        if current_hour == target_hour:
-            publish_editorial_post(slot_name, force=False)
+        if current_hour == target_hour: publish_editorial_post(slot_name, force=False)
 
     if diag_info["posts_sent_count"] == 0:
         publish_editorial_post("morning", force=True)
@@ -548,12 +492,7 @@ def run_radar_cycle():
 
 @app.route("/")
 def dashboard():
-    discover_target_chat(force_refresh=True)
-    updates_html = "".join(
-        f"<li>Событие: <code>{u.get('update_type', ' msg ')}</code> | chat_id: <b>{u.get('chat_id') or u.get('message', {}).get('recipient', {}).get('chat_id')}</b></li>"
-        for u in diag_info["raw_updates"]
-    ) or "<li>Нет событий. Напишите любое сообщение в ваш канал в MAX, чтобы бот увидел его chat_id!</li>"
-
+    check_bot_identity()
     return f"""
     <html>
     <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -561,30 +500,13 @@ def dashboard():
     <body style="font-family: sans-serif; padding: 18px; background: #121212; color: #f0f0f0; line-height: 1.45;">
         <h2>📡 Пульт управления: Радар Путешествий (MAX)</h2>
         <p><b>Бот:</b> <span style="color:#4da3ff;">{diag_info['bot_profile']}</span></p>
-        <p><b>Выбранный chat_id:</b> <code>{diag_info['selected_chat_id']}</code></p>
+        <p><b>Жесткий chat_id канала:</b> <code>{MAX_CHAT_ID}</code></p>
         <p><b>Статус:</b> <code>{diag_info['last_send_status']}</code></p>
         <p><b>Ответ API:</b> <code style="color:#aaa;">{diag_info['last_api_debug']}</code></p>
         <p><a href="/send_now" style="display:inline-block; padding:12px 20px; background:#2b7de9; color:#fff; text-decoration:none; border-radius:8px; font-weight:bold;">🚀 Опубликовать пост прямо сейчас</a></p>
-        <hr style="border-color:#333;">
-        <h3>События /updates (поймайте chat_id канала тут):</h3>
-        <ul>{updates_html}</ul>
-        <hr style="border-color:#333;">
-        <h3>Ручной ввод chat_id (если знаете ID):</h3>
-        <form action="/update_config" method="post">
-            <p>ID канала:<br><input name="chat_id" value="{bot_state.get('custom_chat_id', '')}" style="width:100%; padding:8px; border-radius:4px;"></p>
-            <button type="submit" style="padding:10px 16px; background:#28a745; color:#fff; border:none; border-radius:6px; font-weight:bold;">💾 Сохранить ID</button>
-        </form>
     </body>
     </html>
     """, 200
-
-@app.route("/update_config", methods=["POST"])
-def update_config():
-    cid = (request.form.get("chat_id") or "").strip()
-    bot_state["custom_chat_id"] = cid
-    diag_info["selected_chat_id"] = cid or None
-    save_state(bot_state)
-    return redirect("/")
 
 @app.route("/send_now")
 def trigger_send_now():
