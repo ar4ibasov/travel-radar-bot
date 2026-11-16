@@ -6,9 +6,8 @@ import logging
 from threading import Thread
 from datetime import datetime, date, timedelta, timezone
 import requests
-from flask import Flask, redirect
+from flask import Flask, redirect, request
 
-# --- НАСТРОЙКА ЛОГИРОВАНИЯ ---
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -16,36 +15,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger("MaxTravelEngine")
 
-# --- КОНФИГУРАЦИЯ МЕССЕНДЖЕРА MAX И КЛЮЧЕЙ ---
 MAX_BOT_TOKEN = os.getenv(
     "MAX_BOT_TOKEN",
     "F9LHodD0cOLdtWyEzXzapwvtDXuI5ZMuw2xgW3QYS4rJB1PuFKtB41AvUxhR200ADiAAoVXob03ZN6IgLkWT"
 ).strip()
 
 MAX_CHAT_ID = os.getenv("MAX_CHAT_ID", "").strip()
-MAX_API_URLS = ["https://botapi.max.ru", "https://platform-api.max.ru"]
+MAX_API_URLS = ["https://platform-api.max.ru", "https://botapi.max.ru"]
 
 TRAVELPAYOUTS_TOKEN = os.getenv("TRAVELPAYOUTS_TOKEN", "decbc99d1f0432b2043ff2075dcc8410")
 MARKER = os.getenv("MARKER", "805655")
 
-# Новая официальная ссылка на ваш бизнес-канал в MAX
 CHANNEL_LINK = "https://max.ru/se15023987_biz"
 CACHE_FILE = "max_radar_state.json"
 
-# --- НАСТРОЙКИ РАСПИСАНИЯ И ФИЛЬТРОВ ---
-LOCAL_TZ = timezone(timedelta(hours=5))  # UTC+5
-SCAN_INTERVAL = 2400                     # 40 минут
+LOCAL_TZ = timezone(timedelta(hours=5))
+SCAN_INTERVAL = 2400
 MAX_DEALS_PER_CYCLE = 3
 MAX_DAYS_AHEAD = 90
 HOT_DAYS_THRESHOLD = 14
 MIN_TOUR_DISCOUNT = 14
 MIN_FLIGHT_DISCOUNT = 25
 
-EDITORIAL_SLOTS = {
-    "morning": 9,     # 09:00–09:59
-    "afternoon": 14,  # 14:00–14:59
-    "evening": 19     # 19:00–19:59
-}
+EDITORIAL_SLOTS = {"morning": 9, "afternoon": 14, "evening": 19}
 
 ORIGINS = {
     "SVX": {"name": "Екатеринбург", "tag": "#изЕкатеринбурга"},
@@ -165,19 +157,6 @@ EDITORIAL_POSTS = {
             "tip": "Для отдыха с детьми лучше всего подходят отели в бухте Ялунвань — там самое спокойное море без волн.",
             "photo": "https://images.unsplash.com/photo-1540202404-a2f29016b523?auto=format&fit=crop&w=1200&q=85",
             "tags": "#гидпутешественника #Хайнань #Китай"
-        },
-        {
-            "id": "m_red_sea",
-            "badge": "🌊 УТРЕННИЙ ВЫБОР • КРАСНОЕ МОРЕ",
-            "title": "Шарм-эль-Шейх или Хургада: какой курорт выбрать?",
-            "body": (
-                "Оба курорта Египта работают по системе «Всё включено», но отличаются природой береговой линии.\n\n"
-                "• <b>Шарм-эль-Шейх:</b> живые коралловые рифы прямо у берега и безветренные бухты (Наама-Бей, Шаркс-Бей).\n"
-                "• <b>Хургада:</b> пологие песчаные пляжи и удобный выезд к древним храмам Луксора."
-            ),
-            "tip": "Ради красивого снорклинга и тепла без ветра выбирайте бухты Наама-Бей или Рас-Умм-эль-Сид в Шарме.",
-            "photo": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #Египет #КрасноеМоре"
         }
     ],
     "afternoon": [
@@ -194,19 +173,6 @@ EDITORIAL_POSTS = {
             "tip": "Перед выездом в аэропорт взвесьте ручную кладь дома: перевес на стойке регистрации стоит в 3 раза дороже онлайн-оплаты.",
             "photo": "https://images.unsplash.com/photo-1553531384-cc64ac80f931?auto=format&fit=crop&w=1200&q=85",
             "tags": "#памяткатуриста #лайфхак #авиаперелет"
-        },
-        {
-            "id": "a_currency_tips",
-            "badge": "💳 ВАЖНО ЗНАТЬ • ДЕНЬГИ В ПОЕЗДКЕ",
-            "title": "Какую валюту брать с собой на зарубежные курорты",
-            "body": (
-                "Грамотная подготовка бюджета экономит до 10% на конвертациях во время отпуска.\n\n"
-                "• <b>Наличные доллары:</b> берите купюры нового образца (синие, от 2013 года) без печатей и надрывов.\n"
-                "• <b>Где менять:</b> в аэропорту меняйте только минимум на такси, а основную сумму — в городских обменных пунктах курорта."
-            ),
-            "tip": "Всегда держите 50–100 $ мелкими купюрами по 1, 5 и 10 долларов для мелких расходов в первый день.",
-            "photo": "https://images.unsplash.com/photo-1580519542036-c47de6196ba5?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #валюта #советы"
         }
     ],
     "evening": [
@@ -223,20 +189,6 @@ EDITORIAL_POSTS = {
             "tip": "Приезжайте на мыс Промтхеп за 40 минут до заката — оттуда открывается лучший вид на Андаманское море.",
             "photo": "https://images.unsplash.com/photo-1552465011-b4e21bf6e79a?auto=format&fit=crop&w=1200&q=85",
             "tags": "#вечернийдайджест #Пхукет #пляжимира"
-        },
-        {
-            "id": "e_dubai_evening",
-            "badge": "✨ ВЕЧЕРНИЙ МАРШРУТ • ВОСТОЧНАЯ СКАЗКА",
-            "title": "Вечерний Дубай: где погулять бесплатно и увидеть максимум красоты",
-            "body": (
-                "После захода солнца мегаполис превращается в световую инсталляцию.\n\n"
-                "• <b>Променад Dubai Marina:</b> семикилометровая набережная среди небоскребов и яхт.\n"
-                "• <b>Шоу фонтанов у Burj Khalifa:</b> водные залпы каждые полчаса с 18:00 до 23:00.\n"
-                "• <b>Квартал Al Seef:</b> набережная в старинном арабском стиле вдоль залива Крик."
-            ),
-            "tip": "По заливу Дубай-Крик в районе Al Seef можно переправиться на традиционной лодке «абра» всего за 1 дирхам.",
-            "photo": "https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Дубай #ОАЭ"
         }
     ]
 }
@@ -251,12 +203,13 @@ DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 session = requests.Session()
 app = Flask(__name__)
 
-# Диагностический журнал для просмотра прямо с телефона
 diag_info = {
     "active_api": MAX_API_URLS[0],
+    "bot_profile": "Проверяется...",
     "found_chats": [],
-    "selected_chat_id": None,
+    "selected_chat_id": MAX_CHAT_ID or None,
     "selected_chat_title": None,
+    "last_api_debug": "Ожидание запроса...",
     "last_send_status": "Ожидание первой отправки...",
     "posts_sent_count": 0
 }
@@ -265,7 +218,9 @@ def load_state():
     default_state = {
         "sent_deals": [],
         "editorial_log": {},
-        "editorial_index": {"morning": 0, "afternoon": 0, "evening": 0}
+        "editorial_index": {"morning": 0, "afternoon": 0, "evening": 0},
+        "custom_token": "",
+        "custom_chat_id": ""
     }
     if os.path.exists(CACHE_FILE):
         try:
@@ -281,106 +236,139 @@ def save_state(state):
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        logger.warning(f"Ошибка сохранения состояния: {e}")
+        logger.warning(f"Ошибка сохранения: {e}")
 
 bot_state = load_state()
 
-# --- ПОИСК АКТИВНОГО КАНАЛА В MAX API ---
+def get_active_token():
+    return (bot_state.get("custom_token") or MAX_BOT_TOKEN).strip()
+
+def max_api_request(method, path, params=None, json_data=None, files=None, timeout=12):
+    """Универсальный запрос к MAX API: сначала с заголовком Authorization, затем с query-параметром."""
+    token = get_active_token()
+    params = dict(params or {})
+
+    for base_url in MAX_API_URLS:
+        # Вариант А: только заголовок Authorization (современный стандарт platform-api.max.ru)
+        headers_a = {"Authorization": token}
+        try:
+            res = session.request(method, f"{base_url}{path}", headers=headers_a, params=params, json=json_data, files=files, timeout=timeout)
+            if res.status_code in (200, 201):
+                diag_info["active_api"] = base_url
+                return res
+            diag_info["last_api_debug"] = f"{path} ({base_url} header): HTTP {res.status_code} — {res.text[:180]}"
+        except Exception as e:
+            diag_info["last_api_debug"] = f"Ошибка {base_url}{path}: {e}"
+
+        # Вариант Б: параметр access_token в URL (стандарт старого шлюза)
+        params_b = dict(params)
+        params_b["access_token"] = token
+        try:
+            res_b = session.request(method, f"{base_url}{path}", params=params_b, json=json_data, files=files, timeout=timeout)
+            if res_b.status_code in (200, 201):
+                diag_info["active_api"] = base_url
+                return res_b
+        except Exception:
+            pass
+
+    return None
+
+def check_bot_identity():
+    res = max_api_request("GET", "/me")
+    if res:
+        data = res.json()
+        name = data.get("name") or data.get("first_name") or "Бот"
+        username = data.get("username") or "без_ника"
+        uid = data.get("user_id")
+        diag_info["bot_profile"] = f"{name} (@{username}, ID: {uid})"
+    else:
+        diag_info["bot_profile"] = f"Ошибка токена! ({diag_info['last_api_debug']})"
+
 def discover_target_chat(force_refresh=False):
-    if MAX_CHAT_ID:
-        diag_info["selected_chat_id"] = MAX_CHAT_ID
-        return MAX_CHAT_ID
+    manual_cid = (bot_state.get("custom_chat_id") or MAX_CHAT_ID).strip()
+    if manual_cid:
+        diag_info["selected_chat_id"] = manual_cid
+        diag_info["selected_chat_title"] = "Задан вручную"
+        return manual_cid
 
     if diag_info["selected_chat_id"] and not force_refresh:
         return diag_info["selected_chat_id"]
 
-    headers = {"Authorization": MAX_BOT_TOKEN}
-    params = {"access_token": MAX_BOT_TOKEN, "count": 50}
+    check_bot_identity()
+    discovered = []
 
-    for base_url in MAX_API_URLS:
-        try:
-            res = session.get(f"{base_url}/chats", headers=headers, params=params, timeout=12)
-            if res.status_code == 200:
-                diag_info["active_api"] = base_url
-                chats = res.json().get("chats", [])
-                diag_info["found_chats"] = [
-                    {
-                        "chat_id": c.get("chat_id"),
-                        "title": c.get("title"),
-                        "type": c.get("type"),
-                        "status": c.get("status")
-                    }
-                    for c in chats
-                ]
+    # 1. Проверяем список чатов /chats
+    res_chats = max_api_request("GET", "/chats", params={"count": 50})
+    if res_chats:
+        chats = res_chats.json().get("chats", [])
+        for c in chats:
+            cid = c.get("chat_id")
+            if cid is not None:
+                discovered.append({
+                    "chat_id": str(cid),
+                    "title": c.get("title") or "Чат/Канал",
+                    "type": c.get("type") or "channel",
+                    "status": c.get("status") or "active"
+                })
 
-                # Сначала ищем активный канал с названием "Радар"
-                active_channels = [
-                    c for c in chats
-                    if c.get("status") in ("active", None) and c.get("type") in ("channel", "chat")
-                ]
-                for c in active_channels:
-                    title = (c.get("title") or "").lower()
-                    if "радар" in title or "горящие" in title:
-                        cid = str(c.get("chat_id"))
-                        diag_info["selected_chat_id"] = cid
-                        diag_info["selected_chat_title"] = c.get("title")
-                        logger.info(f"🎯 Найден целевой канал MAX: '{c.get('title')}' (ID: {cid})")
-                        return cid
+    # 2. Проверяем события /updates (ловит канал, если в нем написали сообщение или только что добавили бота)
+    res_upd = max_api_request("GET", "/updates", params={"limit": 50, "timeout": 1})
+    if res_upd:
+        updates = res_upd.json().get("updates", [])
+        for u in updates:
+            cid = u.get("chat_id")
+            title = "Канал из событий /updates"
+            if not cid and isinstance(u.get("message"), dict):
+                rec = u["message"].get("recipient", {})
+                cid = rec.get("chat_id")
+            if cid is not None and not any(d["chat_id"] == str(cid) for d in discovered):
+                discovered.append({
+                    "chat_id": str(cid),
+                    "title": title,
+                    "type": u.get("update_type", "event"),
+                    "status": "active"
+                })
 
-                # Иначе берем самый свежий активный канал
-                for c in active_channels:
-                    if c.get("type") == "channel":
-                        cid = str(c.get("chat_id"))
-                        diag_info["selected_chat_id"] = cid
-                        diag_info["selected_chat_title"] = c.get("title")
-                        logger.info(f"🎯 Выбран активный канал MAX: '{c.get('title')}' (ID: {cid})")
-                        return cid
+    diag_info["found_chats"] = discovered
 
-                if active_channels:
-                    cid = str(active_channels[0].get("chat_id"))
-                    diag_info["selected_chat_id"] = cid
-                    diag_info["selected_chat_title"] = active_channels[0].get("title")
-                    return cid
+    # Выбираем активный канал
+    active = [c for c in discovered if c.get("status") in ("active", None)]
+    for c in active:
+        t = (c.get("title") or "").lower()
+        if "радар" in t or "горящие" in t:
+            diag_info["selected_chat_id"] = c["chat_id"]
+            diag_info["selected_chat_title"] = c["title"]
+            return c["chat_id"]
 
-                diag_info["last_send_status"] = "Список чатов пуст. Проверьте, что именно этот бот добавлен в администраторы канала."
-        except Exception as e:
-            diag_info["last_send_status"] = f"Ошибка /chats ({base_url}): {e}"
-            logger.error(diag_info["last_send_status"])
+    if active:
+        diag_info["selected_chat_id"] = active[0]["chat_id"]
+        diag_info["selected_chat_title"] = active[0]["title"]
+        return active[0]["chat_id"]
 
     return None
 
 def upload_image_to_max(photo_url):
-    base_url = diag_info["active_api"]
-    headers = {"Authorization": MAX_BOT_TOKEN}
-    params = {"access_token": MAX_BOT_TOKEN, "type": "image"}
-    try:
-        up_init = session.post(f"{base_url}/uploads", headers=headers, params=params, timeout=10)
-        if up_init.status_code == 200:
-            upload_url = up_init.json().get("url")
-            if upload_url:
+    up_init = max_api_request("POST", "/uploads", params={"type": "image"})
+    if up_init:
+        upload_url = up_init.json().get("url")
+        if upload_url:
+            try:
                 img_resp = session.get(photo_url, timeout=12)
                 if img_resp.status_code == 200:
                     files = {"data": ("cover.jpg", img_resp.content, "image/jpeg")}
                     up_done = session.post(upload_url, files=files, timeout=20)
                     if up_done.status_code == 200:
-                        # Даем серверу MAX 2 секунды на обработку загруженного фото
                         time.sleep(2.0)
                         return up_done.json()
-    except Exception as e:
-        logger.warning(f"Ошибка загрузки фото через /uploads: {e}")
+            except Exception as e:
+                logger.warning(f"Ошибка загрузки файла фото: {e}")
     return {"url": photo_url}
 
 def send_to_max_channel(photo_url, html_text, buttons=None):
-    target_chat = discover_target_chat(force_refresh=False)
+    target_chat = discover_target_chat(force_refresh=False) or discover_target_chat(force_refresh=True)
     if not target_chat:
-        target_chat = discover_target_chat(force_refresh=True)
-    if not target_chat:
+        diag_info["last_send_status"] = "Канал не найден. Напишите любое сообщение в канал MAX или введите ID канала вручную ниже."
         return False
-
-    base_url = diag_info["active_api"]
-    url = f"{base_url}/messages"
-    headers = {"Authorization": MAX_BOT_TOKEN}
-    params = {"access_token": MAX_BOT_TOKEN, "chat_id": target_chat}
 
     img_payload = upload_image_to_max(photo_url)
     attachments = [{"type": "image", "payload": img_payload}]
@@ -389,54 +377,33 @@ def send_to_max_channel(photo_url, html_text, buttons=None):
         inline_rows = [[{"type": "link", "text": b["text"], "url": b["url"]}] for b in buttons]
         attachments.append({"type": "inline_keyboard", "payload": {"buttons": inline_rows}})
 
-    payload = {
-        "text": html_text,
-        "format": "html",
-        "attachments": attachments
-    }
+    payload = {"text": html_text, "format": "html", "attachments": attachments}
 
-    # Попытка 1: Полная карточка с загруженным фото и кнопками (с повтором при attachment.not.ready)
-    for attempt in range(3):
-        try:
-            res = session.post(url, headers=headers, params=params, json=payload, timeout=15)
-            if res.status_code in (200, 201):
-                diag_info["last_send_status"] = f"Успешно отправлено в {diag_info['selected_chat_title']} ({datetime.now(LOCAL_TZ).strftime('%H:%M:%S')})"
-                diag_info["posts_sent_count"] += 1
-                return True
-            if "attachment.not.ready" in res.text and attempt < 2:
-                time.sleep(2.5)
-                continue
-            diag_info["last_send_status"] = f"Ответ MAX ({res.status_code}): {res.text}"
-            logger.warning(diag_info["last_send_status"])
-            break
-        except Exception as e:
-            diag_info["last_send_status"] = f"Ошибка соединения: {e}"
-            break
-
-    # Попытка 2: Если чат устарел (404/403), обновляем список каналов, а если ошибка во вложении — шлем текст с кнопками
-    discover_target_chat(force_refresh=True)
-    fallback_attachments = []
-    if buttons:
-        inline_rows = [[{"type": "link", "text": b["text"], "url": b["url"]}] for b in buttons]
-        fallback_attachments.append({"type": "inline_keyboard", "payload": {"buttons": inline_rows}})
-
-    fallback_payload = {
-        "text": html_text,
-        "format": "html",
-        "attachments": fallback_attachments
-    }
-    try:
-        res2 = session.post(url, headers=headers, params=params, json=fallback_payload, timeout=15)
-        if res2.status_code in (200, 201):
-            diag_info["last_send_status"] = f"Отправлено (без фото) в {diag_info['selected_chat_title']}"
+    for _ in range(3):
+        res = max_api_request("POST", "/messages", params={"chat_id": target_chat}, json_data=payload, timeout=15)
+        if res:
+            diag_info["last_send_status"] = f"✅ Успешно опубликовано в ID {target_chat} ({datetime.now(LOCAL_TZ).strftime('%H:%M:%S')})"
             diag_info["posts_sent_count"] += 1
             return True
-    except Exception:
-        pass
+        if "attachment.not.ready" in diag_info.get("last_api_debug", ""):
+            time.sleep(2.5)
+            continue
+        break
 
+    # Резервная отправка текста с кнопками без картинки, если сервер фото перегружен
+    fallback_att = []
+    if buttons:
+        inline_rows = [[{"type": "link", "text": b["text"], "url": b["url"]}] for b in buttons]
+        fallback_att.append({"type": "inline_keyboard", "payload": {"buttons": inline_rows}})
+    res2 = max_api_request("POST", "/messages", params={"chat_id": target_chat}, json_data={"text": html_text, "format": "html", "attachments": fallback_att}, timeout=15)
+    if res2:
+        diag_info["last_send_status"] = f"✅ Опубликовано (текст) в ID {target_chat}"
+        diag_info["posts_sent_count"] += 1
+        return True
+
+    diag_info["last_send_status"] = f"❌ Ошибка отправки: {diag_info['last_api_debug']}"
     return False
 
-# --- ФОРМАТИРОВАНИЕ ---
 def format_price(value):
     return f"{int(value):,}".replace(",", " ")
 
@@ -462,33 +429,18 @@ def format_human_date(d_obj):
 
 def fetch_flights(origin_code, one_way="false"):
     url = "https://api.travelpayouts.com/aviasales/v3/prices_for_dates"
-    params = {
-        "origin": origin_code,
-        "currency": "rub",
-        "sorting": "price",
-        "one_way": one_way,
-        "limit": 100,
-        "token": TRAVELPAYOUTS_TOKEN
-    }
+    params = {"origin": origin_code, "currency": "rub", "sorting": "price", "one_way": one_way, "limit": 100, "token": TRAVELPAYOUTS_TOKEN}
     try:
         res = session.get(url, params=params, timeout=15)
         if res.status_code == 200:
             return res.json().get("data", [])
-    except Exception as e:
-        logger.error(f"Ошибка API перелетов ({origin_code}): {e}")
+    except Exception:
+        pass
     return []
 
 def fetch_hotel_stay_price(city_en, check_in, check_out, fallback_per_night, nights):
     url = "http://engine.hotellook.com/api/v2/cache.json"
-    params = {
-        "location": city_en,
-        "checkIn": check_in,
-        "checkOut": check_out,
-        "adults": 2,
-        "currency": "rub",
-        "limit": 5,
-        "token": TRAVELPAYOUTS_TOKEN
-    }
+    params = {"location": city_en, "checkIn": check_in, "checkOut": check_out, "adults": 2, "currency": "rub", "limit": 5, "token": TRAVELPAYOUTS_TOKEN}
     try:
         res = session.get(url, params=params, timeout=6)
         if res.status_code == 200:
@@ -503,18 +455,12 @@ def fetch_hotel_stay_price(city_en, check_in, check_out, fallback_per_night, nig
 
 def build_tour_card(d):
     is_hot = d["days_left"] <= HOT_DAYS_THRESHOLD
-
     if d["is_package_tour"]:
-        if d["discount"] >= 30:
-            header = "💎🔥 <b>ЭКСКЛЮЗИВНЫЙ ПАКЕТНЫЙ ТУР: СУПЕРЦЕНА!</b>"
-        elif is_hot:
-            header = f"🔥🏖 <b>ГОРЯЩИЙ ТУР НА МОРЕ (ВЫГОДА {d['discount']}%)</b>"
-        else:
-            header = f"🌴🗓 <b>ПАКЕТНЫЙ ТУР: РАННЕЕ БРОНИРОВАНИЕ (-{d['discount']}%)</b>"
-
+        header = "💎🔥 <b>ЭКСКЛЮЗИВНЫЙ ПАКЕТНЫЙ ТУР: СУПЕРЦЕНА!</b>" if d["discount"] >= 30 else (
+            f"🔥🏖 <b>ГОРЯЩИЙ ТУР НА МОРЕ (ВЫГОДА {d['discount']}%)</b>" if is_hot else f"🌴🗓 <b>ПАКЕТНЫЙ ТУР: РАННЕЕ БРОНИРОВАНИЕ (-{d['discount']}%)</b>"
+        )
         text = (
-            f"{header}\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"{header}\n━━━━━━━━━━━━━━━━━━━\n"
             f"📍 <b>{d['orig_name']} ➔ {d['dest_name']}</b>\n\n"
             f"📅 <b>Даты тура:</b> {d['dates_human']}\n"
             f"🌙 <b>Длительность:</b> {pluralize_nights(d['nights'])}\n"
@@ -525,43 +471,33 @@ def build_tour_card(d):
             f"👩‍❤️‍👨 <b>Полный тур на двоих: {format_price(d['tour_price_2'])} ₽</b> <s>{format_price(d['tour_avg_2'])} ₽</s>\n"
             f"💸 <b>Ваша экономия на паре:</b> {format_price(d['saved_2'])} ₽\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
-            f"✨ <i>В расчет включены перелет туда-обратно на двоих и проживание в курортном отеле.</i>\n\n"
-            f"{d['hashtags']}"
+            f"✨ <i>В расчет включены перелет туда-обратно на двоих и проживание в курортном отеле.</i>\n\n{d['hashtags']}"
         )
-
         buttons = [
             {"text": f"🏖 Выбрать отель ({format_price(d['hotel_stay_2'])} ₽ за все ночи)", "url": d["hotel_link"]},
             {"text": f"✈️ Забрать перелет на двоих ({format_price(d['flight_price_2'])} ₽)", "url": d["flight_link_2"]},
             {"text": "📡 Радар Путешествий в MAX", "url": CHANNEL_LINK}
         ]
     else:
-        header = f"⚡️✈️ <b>РЕДКИЙ ОБВАЛ ЦЕН НА АВИАБИЛЕТЫ (-{d['discount']}%)</b>"
         text = (
-            f"{header}\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"⚡️✈️ <b>РЕДКИЙ ОБВАЛ ЦЕН НА АВИАБИЛЕТЫ (-{d['discount']}%)</b>\n━━━━━━━━━━━━━━━━━━━\n"
             f"📍 <b>{d['orig_name']} ➔ {d['dest_name']}</b>\n\n"
             f"📅 <b>Дата вылета:</b> {d['dates_human']}\n"
             f"✈️ <b>Рейс:</b> {d['airline']} • {d['transfer_str']}\n"
             f"━━━━━━━━━━━━━━━━━━━\n"
             f"👤 <b>Билет на одного:</b> {format_price(d['flight_price_1'])} ₽ <s>{format_price(d['flight_avg_1'])} ₽</s>\n"
             f"👥 <b>Билеты на двоих: {format_price(d['flight_price_2'])} ₽</b> <i>(выгода {format_price(d['saved_2'])} ₽)</i>\n"
-            f"━━━━━━━━━━━━━━━━━━━\n"
-            f"🔥 <i>Эксклюзивный тариф для самостоятельного путешествия!</i>\n\n"
-            f"{d['hashtags']}"
+            f"━━━━━━━━━━━━━━━━━━━\n{d['hashtags']}"
         )
-
         buttons = [
             {"text": f"🎟 Билет на 1 чел. — {format_price(d['flight_price_1'])} ₽", "url": d["flight_link_1"]},
             {"text": f"👩‍❤️‍👨 Билеты на двоих — {format_price(d['flight_price_2'])} ₽", "url": d["flight_link_2"]}
         ]
-
     return text, buttons
 
 def publish_editorial_post(slot_name, force=False):
     now_local = datetime.now(LOCAL_TZ)
-    today_str = now_local.strftime("%Y-%m-%d")
-    log_key = f"{today_str}_{slot_name}"
-
+    log_key = f"{now_local.strftime('%Y-%m-%d')}_{slot_name}"
     if not force and bot_state["editorial_log"].get(log_key):
         return False
 
@@ -570,13 +506,10 @@ def publish_editorial_post(slot_name, force=False):
     post = posts_list[idx]
 
     html_text = (
-        f"{post['badge']}\n"
+        f"{post['badge']}\n━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>{post['title']}</b>\n\n{post['body']}\n"
         f"━━━━━━━━━━━━━━━━━━━\n"
-        f"<b>{post['title']}</b>\n\n"
-        f"{post['body']}\n"
-        f"━━━━━━━━━━━━━━━━━━━\n"
-        f"💡 <b>Совет Радара:</b> <i>{post['tip']}</i>\n\n"
-        f"{post['tags']} #радарпутешествий"
+        f"💡 <b>Совет Радара:</b> <i>{post['tip']}</i>\n\n{post['tags']} #радарпутешествий"
     )
     buttons = [{"text": "📡 Подписаться на Радар Путешествий", "url": CHANNEL_LINK}]
 
@@ -584,37 +517,27 @@ def publish_editorial_post(slot_name, force=False):
         bot_state["editorial_log"][log_key] = True
         bot_state["editorial_index"][slot_name] = idx + 1
         save_state(bot_state)
-        logger.info(f"📰 Опубликован редакционный пост [{slot_name}]: {post['title']}")
         return True
     return False
 
-def check_and_publish_editorial():
+def run_radar_cycle():
+    discover_target_chat(force_refresh=True)
     current_hour = datetime.now(LOCAL_TZ).hour
     for slot_name, target_hour in EDITORIAL_SLOTS.items():
         if current_hour == target_hour:
             publish_editorial_post(slot_name, force=False)
 
-def run_radar_cycle():
-    discover_target_chat(force_refresh=True)
-    check_and_publish_editorial()
-
-    # Если за всё время работы еще не отправлено ни одного поста — сразу шлем приветственный утренний гид для проверки канала!
     if diag_info["posts_sent_count"] == 0:
         publish_editorial_post("morning", force=True)
 
-    logger.info("📡 Сканирование пакетных туров и эксклюзивных перелетов...")
     today = date.today()
     sent_set = set(bot_state["sent_deals"])
     candidates = []
-
     origin_items = list(ORIGINS.items())
     random.shuffle(origin_items)
 
     for orig_code, orig_meta in origin_items:
-        flights_rt = fetch_flights(orig_code, one_way="false")
-        flights_ow = fetch_flights(orig_code, one_way="true")
-        all_flights = flights_rt + flights_ow
-
+        all_flights = fetch_flights(orig_code, "false") + fetch_flights(orig_code, "true")
         if not all_flights:
             continue
 
@@ -623,9 +546,7 @@ def run_radar_cycle():
             d_code = f.get("destination")
             p = f.get("price") or f.get("value")
             if d_code and p:
-                key = f"{d_code}_{'RT' if f.get('return_at') else 'OW'}"
-                dest_prices.setdefault(key, []).append(p)
-
+                dest_prices.setdefault(f"{d_code}_{'RT' if f.get('return_at') else 'OW'}", []).append(p)
         dest_avg = {k: sum(v) / len(v) for k, v in dest_prices.items()}
 
         for f in all_flights:
@@ -633,10 +554,8 @@ def run_radar_cycle():
             flight_price_1 = f.get("price") or f.get("value")
             dep_at = f.get("departure_at", "")[:10]
             ret_at = f.get("return_at", "")[:10]
-
             if not flight_price_1 or not dep_at or dest_code not in CITY_DATA:
                 continue
-
             try:
                 dep_date = datetime.strptime(dep_at, "%Y-%m-%d").date()
                 days_left = (dep_date - today).days
@@ -667,97 +586,38 @@ def run_radar_cycle():
                         continue
                 except ValueError:
                     continue
-
-                hotel_stay_2 = fetch_hotel_stay_price(
-                    dest_info["en"], dep_at, ret_at, dest_info["hotel_base_2p"], nights
-                )
+                hotel_stay_2 = fetch_hotel_stay_price(dest_info["en"], dep_at, ret_at, dest_info["hotel_base_2p"], nights)
                 avg_hotel_stay_2 = int(dest_info["hotel_base_2p"] * nights * 1.18)
-
                 flight_price_2 = flight_price_1 * 2
-                flight_avg_2 = int(avg_flight_1 * 2)
-
                 tour_price_2 = flight_price_2 + hotel_stay_2
-                tour_avg_2 = flight_avg_2 + avg_hotel_stay_2
-                tour_price_1 = tour_price_2 // 2
-
+                tour_avg_2 = int(avg_flight_1 * 2) + avg_hotel_stay_2
                 discount = int((1 - (tour_price_2 / tour_avg_2)) * 100)
                 if discount < MIN_TOUR_DISCOUNT:
                     continue
-
                 ddmm_ret = ret_at[8:10] + ret_at[5:7]
                 search_route = f"{orig_code}{ddmm_dep}{dest_code}{ddmm_ret}"
-                hotel_link = (
-                    f"https://search.hotellook.com/?destination={dest_info['en']}"
-                    f"&checkIn={dep_at}&checkOut={ret_at}&adults=2&marker={MARKER}&language=ru"
-                )
-
                 candidates.append({
-                    "deal_id": deal_id,
-                    "is_package_tour": True,
-                    "priority_score": discount + 20,
-                    "orig_name": orig_meta["name"],
-                    "dest_name": dest_info["name"],
-                    "photo": dest_info["photo"],
+                    "deal_id": deal_id, "is_package_tour": True, "priority_score": discount + 20,
+                    "orig_name": orig_meta["name"], "dest_name": dest_info["name"], "photo": dest_info["photo"],
                     "dates_human": f"{format_human_date(dep_date)} – {format_human_date(ret_date)}",
-                    "days_left": days_left,
-                    "nights": nights,
-                    "stars": dest_info["stars"],
-                    "meal": dest_info["meal"],
-                    "airline": airline_name,
-                    "transfer_str": format_transfers(f.get("transfers", 0)),
-                    "discount": discount,
-                    "tour_price_1": tour_price_1,
-                    "tour_price_2": tour_price_2,
-                    "tour_avg_2": tour_avg_2,
-                    "hotel_stay_2": hotel_stay_2,
-                    "flight_price_2": flight_price_2,
+                    "days_left": days_left, "nights": nights, "stars": dest_info["stars"], "meal": dest_info["meal"],
+                    "airline": airline_name, "transfer_str": format_transfers(f.get("transfers", 0)),
+                    "discount": discount, "tour_price_1": tour_price_2 // 2, "tour_price_2": tour_price_2,
+                    "tour_avg_2": tour_avg_2, "hotel_stay_2": hotel_stay_2, "flight_price_2": flight_price_2,
                     "saved_2": tour_avg_2 - tour_price_2,
-                    "hotel_link": hotel_link,
+                    "hotel_link": f"https://search.hotellook.com/?destination={dest_info['en']}&checkIn={dep_at}&checkOut={ret_at}&adults=2&marker={MARKER}&language=ru",
                     "flight_link_2": f"https://www.aviasales.ru/search/{search_route}2?marker={MARKER}",
                     "hashtags": f"{orig_meta['tag']} {dest_info['tag']} #пакетныйтур #отпускподключ"
                 })
-            else:
-                discount = int((1 - (flight_price_1 / avg_flight_1)) * 100)
-                if discount < MIN_FLIGHT_DISCOUNT:
-                    continue
-
-                flight_avg_1 = int(avg_flight_1)
-                flight_price_2 = flight_price_1 * 2
-                saved_2 = (flight_avg_1 * 2) - flight_price_2
-                search_route = f"{orig_code}{ddmm_dep}{dest_code}"
-
-                candidates.append({
-                    "deal_id": deal_id,
-                    "is_package_tour": False,
-                    "priority_score": discount,
-                    "orig_name": orig_meta["name"],
-                    "dest_name": dest_info["name"],
-                    "photo": dest_info["photo"],
-                    "dates_human": f"{format_human_date(dep_date)} (через {days_left} дн.)",
-                    "days_left": days_left,
-                    "airline": airline_name,
-                    "transfer_str": format_transfers(f.get("transfers", 0)),
-                    "discount": discount,
-                    "flight_price_1": flight_price_1,
-                    "flight_avg_1": flight_avg_1,
-                    "flight_price_2": flight_price_2,
-                    "saved_2": saved_2,
-                    "flight_link_1": f"https://www.aviasales.ru/search/{search_route}1?marker={MARKER}",
-                    "flight_link_2": f"https://www.aviasales.ru/search/{search_route}2?marker={MARKER}",
-                    "hashtags": f"{orig_meta['tag']} {dest_info['tag']} #эксклюзивныйперелет"
-                })
-
-        time.sleep(0.5)
+        time.sleep(0.4)
 
     candidates.sort(key=lambda x: x["priority_score"], reverse=True)
     sent_count = 0
     used_routes = set()
-
     for deal in candidates:
         route_key = f"{deal['orig_name']}_{deal['dest_name']}"
         if route_key in used_routes:
             continue
-
         html_text, buttons = build_tour_card(deal)
         if send_to_max_channel(deal["photo"], html_text, buttons):
             bot_state["sent_deals"].append(deal["deal_id"])
@@ -765,39 +625,59 @@ def run_radar_cycle():
             sent_count += 1
             save_state(bot_state)
             time.sleep(4)
-
         if sent_count >= MAX_DEALS_PER_CYCLE:
             break
 
-# --- ВЕБ-ПУЛЬТ УПРАВЛЕНИЯ И ДИАГНОСТИКИ ---
 @app.route("/")
 def dashboard():
     discover_target_chat(force_refresh=True)
     chats_html = "".join(
-        f"<li><b>{c['title']}</b> — ID: <code>{c['chat_id']}</code> (тип: {c['type']}, статус: {c['status']})</li>"
+        f"<li><b>{c['title']}</b> — ID: <code>{c['chat_id']}</code> (источник: {c['type']})</li>"
         for c in diag_info["found_chats"]
-    ) or "<li>Каналы пока не обнаружены. Проверьте, тот ли токен бота указан в коде.</li>"
+    ) or "<li>Каналы не найдены. Напишите любое слово в ваш канал в MAX и обновите эту страницу!</li>"
 
     return f"""
     <html>
     <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Пульт Радара Путешествий MAX</title></head>
-    <body style="font-family: sans-serif; padding: 20px; background: #121212; color: #f0f0f0;">
+    <body style="font-family: sans-serif; padding: 18px; background: #121212; color: #f0f0f0; line-height: 1.45;">
         <h2>📡 Пульт управления: Радар Путешествий (MAX)</h2>
+        <p><b>Бот по текущему токену:</b> <span style="color:#4da3ff;">{diag_info['bot_profile']}</span></p>
         <p><b>Выбранный канал:</b> {diag_info['selected_chat_title'] or 'Не выбран'} (ID: <code>{diag_info['selected_chat_id']}</code>)</p>
-        <p><b>Опубликовано постов с момента запуска:</b> {diag_info['posts_sent_count']}</p>
-        <p><b>Последний статус отправки:</b> <code>{diag_info['last_send_status']}</code></p>
+        <p><b>Опубликовано постов:</b> {diag_info['posts_sent_count']}</p>
+        <p><b>Статус отправки:</b> <code>{diag_info['last_send_status']}</code></p>
+        <p><b>Ответ API MAX:</b> <code style="color:#aaa;">{diag_info['last_api_debug']}</code></p>
         <p><a href="/send_now" style="display:inline-block; padding:12px 20px; background:#2b7de9; color:#fff; text-decoration:none; border-radius:8px; font-weight:bold;">🚀 Опубликовать пост прямо сейчас</a></p>
         <hr style="border-color:#333;">
-        <h3>Каналы, которые видит бот:</h3>
+        <h3>Обнаруженные чаты и каналы:</h3>
         <ul>{chats_html}</ul>
+        <hr style="border-color:#333;">
+        <h3>Быстрая привязка (если нужно заменить токен или ID канала):</h3>
+        <form action="/update_config" method="post">
+            <p>ID канала (необязательно):<br><input name="chat_id" value="{bot_state.get('custom_chat_id', '')}" style="width:100%; padding:8px; border-radius:4px;"></p>
+            <p>Новый токен бота (если подключен другой бот):<br><input name="token" placeholder="Оставьте пустым, если токен верный" style="width:100%; padding:8px; border-radius:4px;"></p>
+            <button type="submit" style="padding:10px 16px; background:#28a745; color:#fff; border:none; border-radius:6px; font-weight:bold;">💾 Сохранить настройки</button>
+        </form>
     </body>
     </html>
     """, 200
 
+@app.route("/update_config", methods=["POST"])
+def update_config():
+    cid = (request.form.get("chat_id") or "").strip()
+    tok = (request.form.get("token") or "").strip()
+    bot_state["custom_chat_id"] = cid
+    if tok:
+        bot_state["custom_token"] = tok
+    diag_info["selected_chat_id"] = cid or None
+    save_state(bot_state)
+    discover_target_chat(force_refresh=True)
+    return redirect("/")
+
 @app.route("/send_now")
 def trigger_send_now():
     Thread(target=lambda: publish_editorial_post("morning", force=True), daemon=True).start()
+    time.sleep(1.5)
     return redirect("/")
 
 def background_worker():
