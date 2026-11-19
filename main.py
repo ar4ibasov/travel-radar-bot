@@ -1,51 +1,3 @@
-import os
-import json as json_lib
-import time
-import random
-import logging
-from urllib.parse import quote
-from threading import Thread, Lock
-from datetime import datetime, date, timedelta, timezone
-import requests
-from flask import Flask, redirect
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-    datefmt="%H:%M:%S"
-)
-logger = logging.getLogger("MaxTravelEngine")
-
-# --- КОНФИГУРАЦИЯ MAX И КЛЮЧЕЙ ---
-MAX_BOT_TOKEN = os.getenv(
-    "MAX_BOT_TOKEN",
-    "F9LHodD0cOKKyq5NS6jf921Uz0yHO2YyMY2NxT-IuC6D0kJPOxOXbUUuX1D1lVcPc8XKbyKsv7rAQI5yhH9p"
-).strip()
-MAX_CHAT_ID = os.getenv("MAX_CHAT_ID", "-81280102401406").strip()
-MAX_API_URLS = ["https://platform-api.max.ru", "https://botapi.max.ru"]
-
-TRAVELPAYOUTS_TOKEN = os.getenv("TRAVELPAYOUTS_TOKEN", "decbc99d1f0432b2043ff2075dcc8410")
-MARKER = "805655"
-
-CHANNEL_LINK = "https://max.ru/se15023987_biz"
-CACHE_FILE = "max_radar_state.json"
-
-LOCAL_TZ = timezone(timedelta(hours=5))  # UTC+5 (ХМАО / Тюмень / Екатеринбург)
-CHECK_INTERVAL = 300                     # Проверка расписания каждые 5 минут
-MAX_DAYS_AHEAD = 90
-HOT_DAYS_THRESHOLD = 14
-
-# --- РАСПИСАНИЕ НА 7 ПОСТОВ В ДЕНЬ (UTC+5) ---
-DAILY_SCHEDULE = [
-    {"id": "slot_09", "hour": 9,  "type": "editorial", "pool": "morning",   "label": "09:00 • Утренний гид"},
-    {"id": "slot_11", "hour": 11, "type": "tour",      "pool": "tour",      "label": "11:00 • Пакетный тур #1"},
-    {"id": "slot_13", "hour": 13, "type": "tour",      "pool": "tour",      "label": "13:00 • Пакетный тур #2"},
-    {"id": "slot_15", "hour": 15, "type": "editorial", "pool": "afternoon", "label": "15:00 • Памятка туриста"},
-    {"id": "slot_17", "hour": 17, "type": "tour",      "pool": "tour",      "label": "17:00 • Пакетный тур #3"},
-    {"id": "slot_19", "hour": 19, "type": "editorial", "pool": "evening",   "label": "19:00 • Вечерний дайджест"},
-    {"id": "slot_21", "hour": 21, "type": "tour",      "pool": "tour",      "label": "21:00 • Вечерний супер-тур #4"}
-]
-
 # --- 11 ГОРОДОВ ВЫЛЕТА ---
 ORIGINS = {
     "SGC": {"name": "Сургут", "tag": "#изСургута"},
@@ -58,9 +10,10 @@ ORIGINS = {
     "OVB": {"name": "Новосибирск", "tag": "#изНовосибирска"},
     "KZN": {"name": "Казань", "tag": "#изКазани"},
     "MOW": {"name": "Москва", "tag": "#изМосквы"},
-    "LED": {"name": "Санкт-Петербург", "tag": "#изПетербурга"}
+    "LED": {"name": "Санкт-Петербург", "tag": "#изПетербурга"},
 }
 
+# --- АВИАКОМПАНИИ ---
 AIRLINES = {
     "SU": "Аэрофлот", "S7": "S7 Airlines", "DP": "Победа",
     "U6": "Уральские авиалинии", "UT": "UTair", "N4": "Nordwind",
@@ -71,7 +24,7 @@ AIRLINES = {
     "HY": "Uzbekistan Airways", "KC": "Air Astana", "B2": "Belavia",
     "3U": "Sichuan Airlines", "HU": "Hainan Airlines", "CA": "Air China",
     "MU": "China Eastern", "GF": "Gulf Air", "QR": "Qatar Airways",
-    "EK": "Emirates", "EY": "Etihad Airways", "UL": "SriLankan Airlines"
+    "EK": "Emirates", "EY": "Etihad Airways", "UL": "SriLankan Airlines",
 }
 
 # --- 24 КУРОРТНЫХ НАПРАВЛЕНИЯ ---
@@ -79,126 +32,126 @@ CITY_DATA = {
     "HKT": {
         "name": "Пхукет, Таиланд 🇹🇭", "en": "Phuket", "ostrovok_path": "thailand/phuket", "tag": "#Пхукет #Таиланд",
         "base_flight_rt": 58000, "hotel_base_2p": 4200, "meal": "Завтраки включены (BB)", "stars": "4★ Курортный отель",
-        "photo": "https://images.unsplash.com/photo-1589394815804-964ed0be2eb5?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1589394815804-964ed0be2eb5?auto=format&fit=crop&w=1200&q=85",
     },
     "BKK": {
         "name": "Паттайя / Бангкок, Таиланд 🇹🇭", "en": "Bangkok", "ostrovok_path": "thailand/pattaya", "tag": "#Таиланд #Паттайя",
         "base_flight_rt": 54000, "hotel_base_2p": 3500, "meal": "Завтраки включены (BB)", "stars": "4★ Отель у моря",
-        "photo": "https://images.unsplash.com/photo-1508009603885-50cf7c579365?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1508009603885-50cf7c579365?auto=format&fit=crop&w=1200&q=85",
     },
     "CXR": {
         "name": "Нячанг, Вьетнам 🇻🇳", "en": "Nha Trang", "ostrovok_path": "vietnam/nha_trang", "tag": "#Нячанг #Вьетнам",
         "base_flight_rt": 56000, "hotel_base_2p": 3100, "meal": "Завтраки (BB)", "stars": "4★ Первая линия",
-        "photo": "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1200&q=85",
     },
     "PQC": {
         "name": "о. Фукуок, Вьетнам 🇻🇳", "en": "Phu Quoc", "ostrovok_path": "vietnam/phu_quoc", "tag": "#Фукуок #Вьетнам",
         "base_flight_rt": 60000, "hotel_base_2p": 3900, "meal": "Завтраки (BB)", "stars": "4–5★ Пляжный резорт",
-        "photo": "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=1200&q=85",
     },
     "AYT": {
         "name": "Анталья / Кемер, Турция 🇹🇷", "en": "Antalya", "ostrovok_path": "turkey/antalya", "tag": "#Анталья #Турция",
         "base_flight_rt": 36000, "hotel_base_2p": 5800, "meal": "Всё включено (All Inclusive)", "stars": "4–5★ Курортный спа-отель",
-        "photo": "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1200&q=85",
     },
     "IST": {
         "name": "Стамбул, Турция 🇹🇷", "en": "Istanbul", "ostrovok_path": "turkey/istanbul", "tag": "#Стамбул #Турция",
         "base_flight_rt": 34000, "hotel_base_2p": 4600, "meal": "Завтраки (BB)", "stars": "4★ Исторический центр",
-        "photo": "https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&w=1200&q=85",
     },
     "DLM": {
         "name": "Мармарис / Фетхие, Турция 🇹🇷", "en": "Marmaris", "ostrovok_path": "turkey/marmaris", "tag": "#Мармарис #Фетхие #Турция",
         "base_flight_rt": 39000, "hotel_base_2p": 5500, "meal": "Всё включено (All Inclusive)", "stars": "4–5★ Отель в бухте",
-        "photo": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=85",
     },
     "DXB": {
         "name": "Дубай, ОАЭ 🇦🇪", "en": "Dubai", "ostrovok_path": "united_arab_emirates/dubai", "tag": "#Дубай #ОАЭ",
         "base_flight_rt": 40000, "hotel_base_2p": 6900, "meal": "Завтраки (BB)", "stars": "4★ Отель с бассейном",
-        "photo": "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=85",
     },
     "SHJ": {
         "name": "Шарджа, ОАЭ 🇦🇪", "en": "Sharjah", "ostrovok_path": "united_arab_emirates/sharjah", "tag": "#Шарджа #ОАЭ",
         "base_flight_rt": 37000, "hotel_base_2p": 5200, "meal": "Завтрак + Ужин (HB)", "stars": "4★ Пляжный отель",
-        "photo": "https://images.unsplash.com/photo-1580674684081-7617fbf3d745?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1580674684081-7617fbf3d745?auto=format&fit=crop&w=1200&q=85",
     },
     "AUH": {
         "name": "Абу-Даби, ОАЭ 🇦🇪", "en": "Abu Dhabi", "ostrovok_path": "united_arab_emirates/abu_dhabi", "tag": "#АбуДаби #ОАЭ",
         "base_flight_rt": 38000, "hotel_base_2p": 6400, "meal": "Завтраки (BB)", "stars": "4–5★ Курорт на острове",
-        "photo": "https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1200&q=85",
     },
     "SSH": {
         "name": "Шарм-эль-Шейх, Египет 🇪🇬", "en": "Sharm El Sheikh", "ostrovok_path": "egypt/sharm_el_sheikh", "tag": "#ШармЭльШейх #Египет",
         "base_flight_rt": 44000, "hotel_base_2p": 5600, "meal": "Всё включено (All Inclusive)", "stars": "4–5★ Коралловый риф",
-        "photo": "https://images.unsplash.com/photo-1539650116574-8efeb43e2750?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1539650116574-8efeb43e2750?auto=format&fit=crop&w=1200&q=85",
     },
     "HRG": {
         "name": "Хургада, Египет 🇪🇬", "en": "Hurghada", "ostrovok_path": "egypt/hurghada", "tag": "#Хургада #Египет",
         "base_flight_rt": 42000, "hotel_base_2p": 5100, "meal": "Всё включено (All Inclusive)", "stars": "4–5★ Песчаный пляж",
-        "photo": "https://images.unsplash.com/photo-1568322445074-8f8501e514e2?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1568322445074-8f8501e514e2?auto=format&fit=crop&w=1200&q=85",
     },
     "SYX": {
         "name": "о. Хайнань (Санья), Китай 🇨🇳", "en": "Sanya", "ostrovok_path": "china/sanya", "tag": "#Хайнань #Китай",
         "base_flight_rt": 50000, "hotel_base_2p": 4800, "meal": "Завтраки (BB)", "stars": "4–5★ Тропический резорт",
-        "photo": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=85",
     },
     "DPS": {
         "name": "о. Бали, Индонезия 🇮🇩", "en": "Bali", "ostrovok_path": "indonesia/bali", "tag": "#Бали #Индонезия",
         "base_flight_rt": 68000, "hotel_base_2p": 4500, "meal": "Завтраки (BB)", "stars": "4★ Вилла / Резорт с бассейном",
-        "photo": "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1200&q=85",
     },
     "CMB": {
         "name": "Шри-Ланка (Южное побережье) 🇱🇰", "en": "Colombo", "ostrovok_path": "sri_lanka/unawatuna", "tag": "#ШриЛанка #Океан",
         "base_flight_rt": 56000, "hotel_base_2p": 3700, "meal": "Завтраки (BB)", "stars": "4★ Отель у океана",
-        "photo": "https://images.unsplash.com/photo-1546708973-b339540b5162?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1546708973-b339540b5162?auto=format&fit=crop&w=1200&q=85",
     },
     "MLE": {
         "name": "Мальдивские острова 🇲🇻", "en": "Male", "ostrovok_path": "maldives/male", "tag": "#Мальдивы #РайскийОтдых",
         "base_flight_rt": 66000, "hotel_base_2p": 6800, "meal": "Завтрак + Ужин (HB)", "stars": "4★ Пляжный гестхаус / Резорт",
-        "photo": "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&w=1200&q=85",
     },
     "GOI": {
         "name": "Гоа, Индия 🇮🇳", "en": "Goa", "ostrovok_path": "india/goa", "tag": "#Гоа #Индия",
         "base_flight_rt": 49000, "hotel_base_2p": 3200, "meal": "Завтраки (BB)", "stars": "4★ Курорт у пляжа",
-        "photo": "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1512343879784-a960bf40e7f2?auto=format&fit=crop&w=1200&q=85",
     },
     "AER": {
         "name": "Сочи и Красная Поляна, Россия 🇷🇺", "en": "Sochi", "ostrovok_path": "russia/sochi", "tag": "#Сочи #ЧерноеМоре",
         "base_flight_rt": 21000, "hotel_base_2p": 3800, "meal": "Завтраки (BB)", "stars": "4★ Отель у побережья",
-        "photo": "https://images.unsplash.com/photo-1569683795645-b62e50fbf103?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1569683795645-b62e50fbf103?auto=format&fit=crop&w=1200&q=85",
     },
     "KGD": {
         "name": "Калининград и Балтика 🇷🇺", "en": "Kaliningrad", "ostrovok_path": "russia/kaliningrad", "tag": "#Калининград #Балтика",
         "base_flight_rt": 19000, "hotel_base_2p": 3600, "meal": "Завтраки (BB)", "stars": "4★ Бутик-отель",
-        "photo": "https://images.unsplash.com/photo-1505761671935-60b3a7427bad?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1505761671935-60b3a7427bad?auto=format&fit=crop&w=1200&q=85",
     },
     "MRV": {
         "name": "Кисловодск и Кавминводы 🇷🇺", "en": "Kislovodsk", "ostrovok_path": "russia/kislovodsk", "tag": "#Кисловодск #Кавказ",
         "base_flight_rt": 22000, "hotel_base_2p": 3900, "meal": "Завтрак + спа (BB)", "stars": "4★ Парк-отель / Санаторий",
-        "photo": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=85",
     },
     "MCX": {
         "name": "Дагестан (Каспий и горы) 🇷🇺", "en": "Makhachkala", "ostrovok_path": "russia/derbent", "tag": "#Дагестан #КаспийскоеМоре",
         "base_flight_rt": 21000, "hotel_base_2p": 3500, "meal": "Завтраки (BB)", "stars": "4★ Отель у моря",
-        "photo": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=85",
     },
     "TBS": {
         "name": "Тбилиси, Грузия 🇬🇪", "en": "Tbilisi", "ostrovok_path": "georgia/tbilisi", "tag": "#Тбилиси #Грузия",
         "base_flight_rt": 32000, "hotel_base_2p": 4100, "meal": "Завтраки (BB)", "stars": "4★ Отель в Старом городе",
-        "photo": "https://images.unsplash.com/photo-1565008576549-57569a49371d?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1565008576549-57569a49371d?auto=format&fit=crop&w=1200&q=85",
     },
     "EVN": {
         "name": "Ереван, Армения 🇦🇲", "en": "Yerevan", "ostrovok_path": "armenia/yerevan", "tag": "#Ереван #Армения",
         "base_flight_rt": 28000, "hotel_base_2p": 3900, "meal": "Завтраки (BB)", "stars": "4★ Отель в центре",
-        "photo": "https://images.unsplash.com/photo-1589561454226-796a8aa89b05?auto=format&fit=crop&w=1200&q=85"
+        "photo": "https://images.unsplash.com/photo-1589561454226-796a8aa89b05?auto=format&fit=crop&w=1200&q=85",
     },
     "TAS": {
         "name": "Ташкент и Самарканд, Узбекистан 🇺🇿", "en": "Tashkent", "ostrovok_path": "uzbekistan/samarkand", "tag": "#Узбекистан #Самарканд",
         "base_flight_rt": 29000, "hotel_base_2p": 3600, "meal": "Завтраки (BB)", "stars": "4★ Восточный бутик-отель",
-        "photo": "https://images.unsplash.com/photo-1580655653885-65763b2597d0?auto=format&fit=crop&w=1200&q=85"
-    }
+        "photo": "https://images.unsplash.com/photo-1580655653885-65763b2597d0?auto=format&fit=crop&w=1200&q=85",
+    },
 }
 
-# --- 36 ЭКСПЕРТНЫХ ПОСТОВ ---
+# --- 36 ЭКСПЕРТНЫХ ПОСТОВ (12 УТРЕННИХ, 12 ДНЕВНЫХ, 12 ВЕЧЕРНИХ) ---
 EDITORIAL_POSTS = {
     "morning": [
         {
@@ -212,7 +165,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Выбирайте отели на первой и второй линии в районе Европейского квартала — вся инфраструктура и пляж будут в 3 минутах ходьбы.",
             "photo": "https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #Вьетнам #Нячанг"
+            "tags": "#гидпутешественника #Вьетнам #Нячанг",
         },
         {
             "badge": "🌴 УТРЕННИЙ ОБЗОР • ТРОПИКИ",
@@ -225,7 +178,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Для отдыха с детьми лучше всего подходят отели в бухте Ялунвань — там самое спокойное море без волн.",
             "photo": "https://images.unsplash.com/photo-1540202404-a2f29016b523?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #Хайнань #Китай"
+            "tags": "#гидпутешественника #Хайнань #Китай",
         },
         {
             "badge": "🌊 УТРЕННИЙ ВЫБОР • КРАСНОЕ МОРЕ",
@@ -237,7 +190,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Ради красивого снорклинга и тепла без ветра выбирайте бухты Наама-Бей, Шаркс-Бей или Рас-Умм-эль-Сид в Шарме.",
             "photo": "https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #Египет #КрасноеМоре"
+            "tags": "#гидпутешественника #Египет #КрасноеМоре",
         },
         {
             "badge": "🌺 УТРЕННИЙ ГИД • ТАИЛАНД",
@@ -249,7 +202,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Если летите в Паттайю ради чистого моря, селитесь в районах Пратамнак или Джомтьен и плавайте на пароме на пляжи острова Ко Лан.",
             "photo": "https://images.unsplash.com/photo-1589394815804-964ed0be2eb5?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #Таиланд #Пхукет #Паттайя"
+            "tags": "#гидпутешественника #Таиланд #Пхукет #Паттайя",
         },
         {
             "badge": "🏝 УТРЕННИЙ ОБЗОР • ОСТРОВА",
@@ -262,7 +215,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Для самого удобного отдыха выбирайте отели на пляже Лонг-Бич (Long Beach) — рядом и чистое море, и вечерние ночные рынки с морепродуктами.",
             "photo": "https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #Фукуок #Вьетнам"
+            "tags": "#гидпутешественника #Фукуок #Вьетнам",
         },
         {
             "badge": "☀️ УТРЕННИЙ ВЫБОР • ЭМИРАТЫ",
@@ -275,7 +228,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Многие пляжные отели Шарджи предоставляют бесплатный ежедневный трансфер до торговых центров Дубая.",
             "photo": "https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #ОАЭ #Дубай #Шарджа"
+            "tags": "#гидпутешественника #ОАЭ #Дубай #Шарджа",
         },
         {
             "badge": "🍍 УТРЕННИЙ ГИД • ШРИ-ЛАНКА",
@@ -287,7 +240,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Для спокойного купания без океанской волны выбирайте пляж Унаватуна или лагуну в Мириссе.",
             "photo": "https://images.unsplash.com/photo-1546708973-b339540b5162?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #ШриЛанка #ИндийскийОкеан"
+            "tags": "#гидпутешественника #ШриЛанка #ИндийскийОкеан",
         },
         {
             "badge": "🏰 УТРЕННИЙ МАРШРУТ • БАЛТИКА",
@@ -300,7 +253,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Между Калининградом, Зеленоградском и Светлогорском каждые 30–40 минут ходят скоростные поезда «Ласточка» — дорога занимает всего полчаса.",
             "photo": "https://images.unsplash.com/photo-1505761671935-60b3a7427bad?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #Калининград #Балтика"
+            "tags": "#гидпутешественника #Калининград #Балтика",
         },
         {
             "badge": "⛰ УТРЕННИЙ ОБЗОР • КАВКАЗ",
@@ -313,7 +266,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Поднимитесь на канатной дороге на вершину Малого Седла, а обратно спуститесь пешком через сосновый бор — весь маршрут идет под уклон.",
             "photo": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #Кисловодск #Кавказ"
+            "tags": "#гидпутешественника #Кисловодск #Кавказ",
         },
         {
             "badge": "🌊 УТРЕННИЙ ГИД • ТУРЦИЯ",
@@ -325,7 +278,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Для самых красивых фотографий и спокойной воды выбирайте отели в поселке Ичмелер в 10 минутах от Мармариса.",
             "photo": "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #Турция #Мармарис #Фетхие"
+            "tags": "#гидпутешественника #Турция #Мармарис #Фетхие",
         },
         {
             "badge": "🏜 УТРЕННИЙ МАРШРУТ • ДАГЕСТАН",
@@ -337,7 +290,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Удобнее всего разделить поездку на две части: 2–3 ночи в горном Хунзахе или Гунибе и 2–3 ночи у моря в Дербенте или Каспийске.",
             "photo": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #Дагестан #Дербент"
+            "tags": "#гидпутешественника #Дагестан #Дербент",
         },
         {
             "badge": "🥥 УТРЕННИЙ ГИД • МАЛЬДИВЫ",
@@ -349,8 +302,8 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Бронируйте пакет с питанием «Завтрак + Ужин» (HB) — это позволяет существенно сэкономить на ресторанах на островах.",
             "photo": "https://images.unsplash.com/photo-1514282401047-d79a71a590e8?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#гидпутешественника #Мальдивы #Океан"
-        }
+            "tags": "#гидпутешественника #Мальдивы #Океан",
+        },
     ],
     "afternoon": [
         {
@@ -364,7 +317,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Перед выездом в аэропорт взвесьте ручную кладь дома: перевес на стойке регистрации стоит в 3 раза дороже онлайн-оплаты.",
             "photo": "https://images.unsplash.com/photo-1553531384-cc64ac80f931?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #лайфхак #авиаперелет"
+            "tags": "#памяткатуриста #лайфхак #авиаперелет",
         },
         {
             "badge": "💳 ВАЖНО ЗНАТЬ • ДЕНЬГИ В ПОЕЗДКЕ",
@@ -376,7 +329,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Всегда держите 50–100 $ мелкими купюрами по 1, 5 и 10 долларов для оплаты визовых марок, чаевых и мелких расходов в первый день.",
             "photo": "https://images.unsplash.com/photo-1580519542036-c47de6196ba5?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #валюта #советы"
+            "tags": "#памяткатуриста #валюта #советы",
         },
         {
             "badge": "💊 ПАМЯТКА ТУРИСТА • АПТЕЧКА",
@@ -388,7 +341,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Перевозите лекарства в заводских упаковках с инструкцией, а жидкие сиропы и спреи свыше 100 мл убирайте в сдаваемый багаж.",
             "photo": "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #аптечка #безопасность"
+            "tags": "#памяткатуриста #аптечка #безопасность",
         },
         {
             "badge": "✈️ ЛАЙФХАК В ПОЛЕТЕ • КОМФОРТ",
@@ -401,7 +354,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Открывайте онлайн-регистрацию ровно за 24 часа до вылета — в этот момент большинство авиакомпаний дают выбрать удобные места бесплатно.",
             "photo": "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #самолет #лайфхак"
+            "tags": "#памяткатуриста #самолет #лайфхак",
         },
         {
             "badge": "📱 СВЯЗЬ В ОТПУСКЕ • ИНТЕРНЕТ",
@@ -413,7 +366,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Перед вылетом скачайте офлайн-карты курорта (Organic Maps или Яндекс Карты) — они работают по GPS вообще без интернета.",
             "photo": "https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #интернет #связь"
+            "tags": "#памяткатуриста #интернет #связь",
         },
         {
             "badge": "🚕 ТРАНСФЕР И ТАКСИ • ЭКОНОМИЯ",
@@ -425,7 +378,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Если берете такси на стойке в аэропорту, поднимайтесь на этаж вылета (Departure) — там машины, которые только что привезли пассажиров, берут попутчиков гораздо дешевле.",
             "photo": "https://images.unsplash.com/photo-1449965408869-eaa3f722e40d?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #трансфер #экономия"
+            "tags": "#памяткатуриста #трансфер #экономия",
         },
         {
             "badge": "🛡 СТРАХОВКА В ПОЕЗДКЕ • СОВЕТ",
@@ -437,7 +390,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "При наступлении страхового случая сначала позвоните или напишите в сервисную компанию (ассистанс) по номеру в полисе — они сами направят вас в клинику.",
             "photo": "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #страховка #отпуск"
+            "tags": "#памяткатуриста #страховка #отпуск",
         },
         {
             "badge": "☀️ БЕЗОПАСНЫЙ ЗАГАР • ТРОПИКИ",
@@ -449,7 +402,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Наносите крем с защитой SPF 50 за 20 минут до выхода из номера, чтобы он успел впитаться до контакта с морской водой.",
             "photo": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #пляж #море"
+            "tags": "#памяткатуриста #пляж #море",
         },
         {
             "badge": "📉 СЕКРЕТЫ ЦЕН • КОГДА БРОНИРОВАТЬ",
@@ -461,7 +414,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Самые низкие цены на вылеты статистически приходятся на вторник, среду и четверг.",
             "photo": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #горящиетуры #экономия"
+            "tags": "#памяткатуриста #горящиетуры #экономия",
         },
         {
             "badge": "⏰ АДАПТАЦИЯ • ЧАСОВЫЕ ПОЯСА",
@@ -473,7 +426,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Возьмите в ручную кладь надувную подушку под шею и плотную маску для сна — даже 3 часа сна в самолете сэкономят вам целый первый день отпуска.",
             "photo": "https://images.unsplash.com/photo-1540339832862-474599807836?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #перелет #здоровье"
+            "tags": "#памяткатуриста #перелет #здоровье",
         },
         {
             "badge": "📋 ЧЕК-ЛИСТ • ПЕРЕД ВЫЕЗДОМ",
@@ -486,7 +439,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Сфотографируйте свой чемодан на телефон перед сдачей в багаж — это ускорит поиск и оформление, если багаж задержится при стыковке.",
             "photo": "https://images.unsplash.com/photo-1530521954074-e64f6810b32d?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #чеклист #аэропорт"
+            "tags": "#памяткатуриста #чеклист #аэропорт",
         },
         {
             "badge": "🗺 ЭКСКУРСИИ • ЛАЙФХАК",
@@ -498,8 +451,8 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Приезжайте к популярным смотровым площадкам и древним городам к открытию (в 08:00–08:30 утра) — еще нет жары и туристических автобусов.",
             "photo": "https://images.unsplash.com/photo-1501785888041-af3ef285b470?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#памяткатуриста #экскурсии #лайфхак"
-        }
+            "tags": "#памяткатуриста #экскурсии #лайфхак",
+        },
     ],
     "evening": [
         {
@@ -513,7 +466,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Приезжайте на мыс Промтхеп за 40 минут до заката — оттуда открывается лучший вид на Андаманское море.",
             "photo": "https://images.unsplash.com/photo-1552465011-b4e21bf6e79a?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Пхукет #пляжимира"
+            "tags": "#вечернийдайджест #Пхукет #пляжимира",
         },
         {
             "badge": "✨ ВЕЧЕРНИЙ МАРШРУТ • ВОСТОЧНАЯ СКАЗКА",
@@ -526,7 +479,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "По заливу Дубай-Крик в районе Al Seef можно переправиться на традиционной лодке «абра» всего за 1 дирхам.",
             "photo": "https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Дубай #ОАЭ"
+            "tags": "#вечернийдайджест #Дубай #ОАЭ",
         },
         {
             "badge": "🌉 ВЕЧЕРНЕЕ ВДОХНОВЕНИЕ • БОСФОР",
@@ -538,7 +491,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Садитесь на городской паром за полчаса до заката солнца — он стоит по транспортной карте Istanbulkart как обычная поездка на метро.",
             "photo": "https://images.unsplash.com/photo-1541432901042-2d8bd64b4a9b?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Стамбул #Турция"
+            "tags": "#вечернийдайджест #Стамбул #Турция",
         },
         {
             "badge": "🌺 ВЕЧЕРНЯЯ ЭКЗОТИКА • ОСТРОВ БАЛИ",
@@ -550,7 +503,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "На пляже Джимбаран столики выставляют прямо у кромки прибоя — приходите к 17:45, чтобы занять первый ряд у воды.",
             "photo": "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Бали #Индонезия"
+            "tags": "#вечернийдайджест #Бали #Индонезия",
         },
         {
             "badge": "🏔 ВЕЧЕРНИЙ МАРШРУТ • ЧЕРНОЕ МОРЕ",
@@ -562,7 +515,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Возьмите напрокат велосипед или электросамокат в Сириусе — вдоль всей морской набережной проложена выделенная дорожка.",
             "photo": "https://images.unsplash.com/photo-1569683795645-b62e50fbf103?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Сочи #КраснаяПоляна"
+            "tags": "#вечернийдайджест #Сочи #КраснаяПоляна",
         },
         {
             "badge": "🍇 ВЕЧЕРНЯЯ АТМОСФЕРА • ГРУЗИЯ",
@@ -574,7 +527,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Загляните вечером на блошиный рынок у Сухого моста и прогуляйтесь по пешеходному проспекту Давида Агмашенебели.",
             "photo": "https://images.unsplash.com/photo-1565008576549-57569a49371d?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Тбилиси #Грузия"
+            "tags": "#вечернийдайджест #Тбилиси #Грузия",
         },
         {
             "badge": "🕌 ВЕЧЕРНИЙ ВОСТОК • САМАРКАНД",
@@ -586,7 +539,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Между Ташкентом, Самаркандом и Бухарой курсирует скоростной поезд «Афросиаб» — дорога из столицы в Самарканд занимает всего 2 часа.",
             "photo": "https://images.unsplash.com/photo-1580655653885-65763b2597d0?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Самарканд #Узбекистан"
+            "tags": "#вечернийдайджест #Самарканд #Узбекистан",
         },
         {
             "badge": "🏛 ВЕЧЕРНЯЯ АНТИЧНОСТЬ • СИДЕ",
@@ -598,7 +551,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Вход к колоннам храма Аполлона полностью бесплатный и открыт круглосуточно.",
             "photo": "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Сиде #Турция"
+            "tags": "#вечернийдайджест #Сиде #Турция",
         },
         {
             "badge": "🌊 ВЕЧЕРНИЙ ПРОМЕНАД • ВЬЕТНАМ",
@@ -610,7 +563,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Поднимитесь вечером в панорамное кафе на крыше отеля Skylight или Panorama — входной билет обычно уже включает прохладительный напиток.",
             "photo": "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Нячанг #Вьетнам"
+            "tags": "#вечернийдайджест #Нячанг #Вьетнам",
         },
         {
             "badge": "🌲 ВЕЧЕР НА БАЛТИКЕ • СВЕТЛОГОРСК",
@@ -622,7 +575,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "После прогулки у моря загляните в пекарни Светлогорска за горячими кёнигсбергскими марципанами и облепиховым чаем.",
             "photo": "https://images.unsplash.com/photo-1505761671935-60b3a7427bad?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Светлогорск #КуршскаяКоса"
+            "tags": "#вечернийдайджест #Светлогорск #КуршскаяКоса",
         },
         {
             "badge": "🏔 ВЕЧЕРНИЙ ЕРЕВАН • КАСКАД",
@@ -634,7 +587,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Чтобы не подниматься по ступеням Каскада пешком, зайдите внутрь комплекса слева — там работают бесплатные эскалаторы до самой верхней смотровой площадки.",
             "photo": "https://images.unsplash.com/photo-1589561454226-796a8aa89b05?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Ереван #Армения"
+            "tags": "#вечернийдайджест #Ереван #Армения",
         },
         {
             "badge": "🏮 ВЕЧЕРНЯЯ АЗИЯ • БАНГКОК",
@@ -646,503 +599,7 @@ EDITORIAL_POSTS = {
             ),
             "tip": "Обычный городской катер с оранжевым или синим флагом провезет вас по тому же маршруту, что и дорогие круизные лайнеры, всего за 16–30 бат.",
             "photo": "https://images.unsplash.com/photo-1508009603885-50cf7c579365?auto=format&fit=crop&w=1200&q=85",
-            "tags": "#вечернийдайджест #Бангкок #Таиланд"
-        }
-    ]
+            "tags": "#вечернийдайджест #Бангкок #Таиланд",
+        },
+    ],
 }
-
-MONTHS_RU = {1: "января", 2: "февраля", 3: "марта", 4: "апреля", 5: "мая", 6: "июня", 7: "июля", 8: "августа", 9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"}
-DAYS_RU = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-
-session = requests.Session()
-app = Flask(__name__)
-worker_lock = Lock()
-cycle_lock = Lock()
-worker_started = False
-
-diag_info = {
-    "active_api": MAX_API_URLS[0],
-    "bot_profile": "Проверяется...",
-    "last_api_debug": "Ожидание запроса...",
-    "last_send_status": "Ожидание автоматической отправки...",
-    "last_check_time": "Еще не выполнялась",
-    "last_hotel_url": "Пока не сформирована",
-    "posts_sent_count": 0
-}
-
-def load_state():
-    default_state = {
-        "sent_deals": [],
-        "slot_log": {},
-        "editorial_offset": {"morning": 0, "afternoon": 0, "evening": 0}
-    }
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                default_state.update(json_lib.load(f))
-        except Exception:
-            pass
-    return default_state
-
-def save_state(state):
-    try:
-        state["sent_deals"] = state["sent_deals"][-1200:]
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json_lib.dump(state, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.warning(f"Ошибка сохранения состояния: {e}")
-
-bot_state = load_state()
-
-def max_api_request(method, path, params=None, json_data=None, files=None, timeout=12):
-    token = MAX_BOT_TOKEN
-    params = dict(params or {})
-    for base_url in MAX_API_URLS:
-        headers_a = {"Authorization": token}
-        try:
-            res = session.request(method, f"{base_url}{path}", headers=headers_a, params=params, json=json_data, files=files, timeout=timeout)
-            if res.status_code in (200, 201):
-                diag_info["active_api"] = base_url
-                diag_info["last_api_debug"] = f"OK ({res.status_code}) via {base_url}"
-                return res
-            diag_info["last_api_debug"] = f"{path} ({base_url}): HTTP {res.status_code} — {res.text[:150]}"
-        except Exception as e:
-            diag_info["last_api_debug"] = f"Ошибка {base_url}{path}: {e}"
-
-        params_b = dict(params)
-        params_b["access_token"] = token
-        try:
-            res_b = session.request(method, f"{base_url}{path}", params=params_b, json=json_data, files=files, timeout=timeout)
-            if res_b.status_code in (200, 201):
-                diag_info["active_api"] = base_url
-                diag_info["last_api_debug"] = f"OK ({res_b.status_code}) via {base_url}"
-                return res_b
-        except Exception:
-            pass
-    return None
-
-def check_bot_identity():
-    res = max_api_request("GET", "/me")
-    if res:
-        data = res.json()
-        name = data.get("name") or data.get("first_name") or "Бот"
-        username = data.get("username") or "без_ника"
-        uid = data.get("user_id")
-        diag_info["bot_profile"] = f"{name} (@{username}, ID: {uid})"
-    else:
-        diag_info["bot_profile"] = f"Ошибка токена! ({diag_info['last_api_debug']})"
-
-def upload_image_to_max(photo_url):
-    up_init = max_api_request("POST", "/uploads", params={"type": "image"})
-    if up_init:
-        upload_url = up_init.json().get("url")
-        if upload_url:
-            try:
-                img_resp = session.get(photo_url, timeout=12)
-                if img_resp.status_code == 200:
-                    files = {"data": ("cover.jpg", img_resp.content, "image/jpeg")}
-                    up_done = session.post(upload_url, files=files, timeout=20)
-                    if up_done.status_code == 200:
-                        time.sleep(2.0)
-                        return up_done.json()
-            except Exception:
-                pass
-    return {"url": photo_url}
-
-def send_to_max_channel(photo_url, html_text, buttons=None):
-    target_chat = MAX_CHAT_ID
-    if not target_chat:
-        return False
-
-    img_payload = upload_image_to_max(photo_url)
-    attachments = [{"type": "image", "payload": img_payload}]
-    if buttons:
-        inline_rows = [[{"type": "link", "text": b["text"], "url": b["url"]}] for b in buttons]
-        attachments.append({"type": "inline_keyboard", "payload": {"buttons": inline_rows}})
-
-    payload = {"text": html_text, "format": "html", "attachments": attachments}
-
-    for attempt in range(3):
-        res = max_api_request("POST", "/messages", params={"chat_id": target_chat}, json_data=payload, timeout=15)
-        if res:
-            now_str = datetime.now(LOCAL_TZ).strftime("%H:%M:%S")
-            diag_info["last_send_status"] = f"✅ Успешно отправлено в {now_str} (всего: {diag_info['posts_sent_count'] + 1})"
-            diag_info["posts_sent_count"] += 1
-            return True
-        if "attachment.not.ready" in diag_info.get("last_api_debug", "") and attempt < 2:
-            time.sleep(2.5)
-            continue
-        break
-
-    res2 = max_api_request("POST", "/messages", params={"chat_id": target_chat}, json_data={"text": html_text, "format": "html"}, timeout=15)
-    if res2:
-        now_str = datetime.now(LOCAL_TZ).strftime("%H:%M:%S")
-        diag_info["last_send_status"] = f"✅ Отправлено (текст) в {now_str}"
-        diag_info["posts_sent_count"] += 1
-        return True
-
-    diag_info["last_send_status"] = f"❌ Ошибка отправки: {diag_info['last_api_debug']}"
-    return False
-
-def format_price(value):
-    return f"{int(value):,}".replace(",", " ")
-
-def pluralize_nights(n):
-    if 11 <= n % 100 <= 19:
-        return f"{n} ночей"
-    rem = n % 10
-    if rem == 1:
-        return f"{n} ночь"
-    if 2 <= rem <= 4:
-        return f"{n} ночи"
-    return f"{n} ночей"
-
-def format_transfers(count):
-    if count == 0:
-        return "Прямой перелет"
-    if count == 1:
-        return "1 удобная стыковка"
-    return f"{count} пересадки"
-
-def format_human_date(d_obj):
-    return f"{d_obj.day} {MONTHS_RU[d_obj.month]} ({DAYS_RU[d_obj.weekday()]})"
-
-def fetch_flights(origin_code):
-    url = "https://api.travelpayouts.com/aviasales/v3/prices_for_dates"
-    params = {
-        "origin": origin_code,
-        "currency": "rub",
-        "sorting": "price",
-        "one_way": "false",
-        "limit": 100,
-        "token": TRAVELPAYOUTS_TOKEN
-    }
-    try:
-        res = session.get(url, params=params, timeout=12)
-        if res.status_code == 200:
-            data = res.json().get("data", [])
-            if data:
-                return data
-    except Exception:
-        pass
-
-    params["one_way"] = "true"
-    try:
-        res = session.get(url, params=params, timeout=12)
-        if res.status_code == 200:
-            return res.json().get("data", [])
-    except Exception:
-        pass
-    return []
-
-def fetch_hotel_stay_price(city_en, check_in, check_out, fallback_per_night, nights):
-    url = "http://engine.hotellook.com/api/v2/cache.json"
-    params = {
-        "location": city_en,
-        "checkIn": check_in,
-        "checkOut": check_out,
-        "adults": 2,
-        "currency": "rub",
-        "limit": 5,
-        "token": TRAVELPAYOUTS_TOKEN
-    }
-    try:
-        res = session.get(url, params=params, timeout=6)
-        if res.status_code == 200:
-            hotels = res.json()
-            if isinstance(hotels, list) and hotels:
-                prices = [h.get("priceFrom") for h in hotels if h.get("priceFrom")]
-                if prices:
-                    return int(min(prices))
-    except Exception:
-        pass
-    return int(fallback_per_night * nights)
-
-def build_russian_hotel_link(dest_info, dep_date, ret_date):
-    """Формирует партнерскую ссылку tp.media/r для Островка с пробросом дат и курорта."""
-    path = dest_info.get("ostrovok_path", "russia/sochi")
-    dates_str = f"{dep_date.strftime('%d.%m.%Y')}-{ret_date.strftime('%d.%m.%Y')}"
-    target_url = f"https://ostrovok.ru/hotel/{path}/?dates={dates_str}&guests=2"
-    
-    # Обертка в ваш партнерский трекер Travelpayouts (маркер 805655, оффер Островка p=4115)
-    affiliate_url = f"https://tp.media/r?marker={MARKER}&p=4115&u={quote(target_url, safe='')}"
-    diag_info["last_hotel_url"] = affiliate_url
-    return affiliate_url
-
-def build_tour_card(d):
-    is_hot = d["days_left"] <= HOT_DAYS_THRESHOLD
-    if d["discount"] >= 28:
-        header = f"💎🔥 <b>ЭКСКЛЮЗИВНЫЙ ПАКЕТНЫЙ ТУР (-{d['discount']}%)</b>"
-    elif is_hot:
-        header = f"🔥🏖 <b>ГОРЯЩИЙ ТУР НА МОРЕ (ВЫГОДА {d['discount']}%)</b>"
-    else:
-        header = f"🌴🗓 <b>ПАКЕТНЫЙ ТУР: ОТПУСК ПОД КЛЮЧ (-{d['discount']}%)</b>"
-
-    text = (
-        f"{header}\n━━━━━━━━━━━━━━━━━━━\n"
-        f"📍 <b>{d['orig_name']} ➔ {d['dest_name']}</b>\n\n"
-        f"📅 <b>Даты тура:</b> {d['dates_human']}\n"
-        f"🌙 <b>Длительность:</b> {pluralize_nights(d['nights'])}\n"
-        f"🏨 <b>Проживание:</b> {d['stars']} • {d['meal']}\n"
-        f"✈️ <b>Перелет:</b> Туда-обратно ({d['airline']}, {d['transfer_str']})\n"
-        f"━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 <b>За 1 человека (при двухместном):</b> {format_price(d['tour_price_1'])} ₽\n"
-        f"👩‍❤️‍👨 <b>Полный тур на двоих: {format_price(d['tour_price_2'])} ₽</b> <s>{format_price(d['tour_avg_2'])} ₽</s>\n"
-        f"💸 <b>Экономия на паре:</b> {format_price(d['saved_2'])} ₽\n"
-        f"━━━━━━━━━━━━━━━━━━━\n"
-        f"✨ <i>В стоимость включены перелет туда-обратно на двоих и проживание в курортном отеле.</i>\n\n"
-        f"{d['hashtags']} #радарпутешествий"
-    )
-    buttons = [
-        {"text": f"🏖 Выбрать отель ({format_price(d['hotel_stay_2'])} ₽ за все ночи)", "url": d["hotel_link"]},
-        {"text": f"✈️ Забрать перелет на двоих ({format_price(d['flight_price_2'])} ₽)", "url": d["flight_link_2"]},
-        {"text": "📡 Радар Путешествий в MAX", "url": CHANNEL_LINK}
-    ]
-    return text, buttons
-
-def publish_single_tour_post():
-    today = date.today()
-    sent_set = set(bot_state["sent_deals"])
-    candidates = []
-
-    origin_items = list(ORIGINS.items())
-    random.shuffle(origin_items)
-
-    for orig_code, orig_meta in origin_items[:7]:
-        flights = fetch_flights(orig_code)
-        if not flights:
-            continue
-
-        for f in flights:
-            dest_code = f.get("destination")
-            raw_price = f.get("price") or f.get("value")
-            dep_at = f.get("departure_at", "")[:10]
-            ret_at = f.get("return_at", "")[:10]
-
-            if not raw_price or not dep_at or dest_code not in CITY_DATA:
-                continue
-
-            try:
-                dep_date = datetime.strptime(dep_at, "%Y-%m-%d").date()
-                days_left = (dep_date - today).days
-                if not (1 <= days_left <= MAX_DAYS_AHEAD):
-                    continue
-            except ValueError:
-                continue
-
-            if ret_at:
-                try:
-                    ret_date = datetime.strptime(ret_at, "%Y-%m-%d").date()
-                    nights = (ret_date - dep_date).days
-                    if not (5 <= nights <= 15):
-                        nights = 8
-                        ret_date = dep_date + timedelta(days=nights)
-                        ret_at = ret_date.strftime("%Y-%m-%d")
-                except ValueError:
-                    nights = 8
-                    ret_date = dep_date + timedelta(days=nights)
-                    ret_at = ret_date.strftime("%Y-%m-%d")
-                flight_rt_1 = int(raw_price)
-            else:
-                nights = random.choice([7, 8, 9, 10])
-                ret_date = dep_date + timedelta(days=nights)
-                ret_at = ret_date.strftime("%Y-%m-%d")
-                flight_rt_1 = int(raw_price * 1.85)
-
-            deal_id = f"{orig_code}_{dest_code}_{dep_at}_{flight_rt_1}"
-            if deal_id in sent_set:
-                continue
-
-            dest_info = CITY_DATA[dest_code]
-            hotel_stay_2 = fetch_hotel_stay_price(
-                dest_info["en"], dep_at, ret_at, dest_info["hotel_base_2p"], nights
-            )
-
-            flight_price_2 = flight_rt_1 * 2
-            tour_price_2 = flight_price_2 + hotel_stay_2
-
-            market_flight_2 = dest_info["base_flight_rt"] * 2
-            market_hotel_2 = int(dest_info["hotel_base_2p"] * nights * 1.25)
-            tour_avg_2 = max(market_flight_2 + market_hotel_2, int(tour_price_2 * 1.18))
-
-            discount = int((1 - (tour_price_2 / tour_avg_2)) * 100)
-            if discount < 12:
-                continue
-
-            ddmm_dep = dep_at[8:10] + dep_at[5:7]
-            ddmm_ret = ret_at[8:10] + ret_at[5:7]
-            search_route = f"{orig_code}{ddmm_dep}{dest_code}{ddmm_ret}"
-            airline_code = f.get("airline", "")
-            airline_name = AIRLINES.get(airline_code, "Регулярный рейс")
-
-            candidates.append({
-                "deal_id": deal_id,
-                "priority_score": discount + (10 if days_left <= HOT_DAYS_THRESHOLD else 0) + random.randint(0, 6),
-                "orig_name": orig_meta["name"],
-                "dest_name": dest_info["name"],
-                "photo": dest_info["photo"],
-                "dates_human": f"{format_human_date(dep_date)} – {format_human_date(ret_date)}",
-                "days_left": days_left,
-                "nights": nights,
-                "stars": dest_info["stars"],
-                "meal": dest_info["meal"],
-                "airline": airline_name,
-                "transfer_str": format_transfers(f.get("transfers", 0)),
-                "discount": discount,
-                "tour_price_1": tour_price_2 // 2,
-                "tour_price_2": tour_price_2,
-                "tour_avg_2": tour_avg_2,
-                "hotel_stay_2": hotel_stay_2,
-                "flight_price_2": flight_price_2,
-                "saved_2": tour_avg_2 - tour_price_2,
-                "hotel_link": build_russian_hotel_link(dest_info, dep_date, ret_date),
-                "flight_link_2": f"https://www.aviasales.ru/search/{search_route}2?marker={MARKER}",
-                "hashtags": f"{orig_meta['tag']} {dest_info['tag']} #пакетныйтур #отпускподключ"
-            })
-
-        if len(candidates) >= 12:
-            break
-
-    if not candidates:
-        bot_state["sent_deals"] = []
-        return False
-
-    candidates.sort(key=lambda x: x["priority_score"], reverse=True)
-    best_deal = candidates[0]
-    html_text, buttons = build_tour_card(best_deal)
-
-    if send_to_max_channel(best_deal["photo"], html_text, buttons):
-        bot_state["sent_deals"].append(best_deal["deal_id"])
-        save_state(bot_state)
-        return True
-    return False
-
-def publish_editorial_post(pool_name):
-    posts_list = EDITORIAL_POSTS.get(pool_name, EDITORIAL_POSTS["morning"])
-    day_of_year = datetime.now(LOCAL_TZ).timetuple().tm_yday
-    offset = bot_state.get("editorial_offset", {}).get(pool_name, 0)
-    idx = (day_of_year + offset) % len(posts_list)
-    post = posts_list[idx]
-
-    html_text = (
-        f"{post['badge']}\n━━━━━━━━━━━━━━━━━━━\n"
-        f"<b>{post['title']}</b>\n\n{post['body']}\n"
-        f"━━━━━━━━━━━━━━━━━━━\n"
-        f"💡 <b>Совет Радара:</b> <i>{post['tip']}</i>\n\n{post['tags']} #радарпутешествий"
-    )
-    buttons = [{"text": "📡 Подписаться на Радар Путешествий", "url": CHANNEL_LINK}]
-
-    if send_to_max_channel(post["photo"], html_text, buttons):
-        bot_state.setdefault("editorial_offset", {})[pool_name] = offset + 1
-        save_state(bot_state)
-        return True
-    return False
-
-def evaluate_schedule():
-    if not cycle_lock.acquire(blocking=False):
-        return
-
-    try:
-        check_bot_identity()
-        now_local = datetime.now(LOCAL_TZ)
-        today_str = now_local.strftime("%Y-%m-%d")
-        current_hour = now_local.hour
-        diag_info["last_check_time"] = now_local.strftime("%H:%M:%S (UTC+5)")
-
-        due_slots = [
-            s for s in DAILY_SCHEDULE
-            if s["hour"] <= current_hour and (current_hour - s["hour"]) <= 2
-            and not bot_state["slot_log"].get(f"{today_str}_{s['id']}")
-        ]
-
-        if due_slots:
-            slot = due_slots[-1]
-            log_key = f"{today_str}_{slot['id']}"
-            ok = publish_single_tour_post() if slot["type"] == "tour" else publish_editorial_post(slot["pool"])
-            if ok:
-                bot_state["slot_log"][log_key] = now_local.strftime("%H:%M")
-                save_state(bot_state)
-    except Exception as e:
-        logger.error(f"Ошибка проверки расписания: {e}")
-    finally:
-        cycle_lock.release()
-
-def background_worker():
-    time.sleep(8)
-    while True:
-        try:
-            evaluate_schedule()
-        except Exception as e:
-            logger.error(f"Сбой фонового потока: {e}")
-        time.sleep(CHECK_INTERVAL)
-
-def ensure_worker_started():
-    global worker_started
-    with worker_lock:
-        if not worker_started:
-            Thread(target=background_worker, daemon=True).start()
-            worker_started = True
-
-ensure_worker_started()
-
-@app.route("/ping")
-def ping():
-    ensure_worker_started()
-    Thread(target=evaluate_schedule, daemon=True).start()
-    return "OK", 200
-
-@app.route("/")
-def dashboard():
-    ensure_worker_started()
-    Thread(target=evaluate_schedule, daemon=True).start()
-
-    now_local = datetime.now(LOCAL_TZ)
-    today_str = now_local.strftime("%Y-%m-%d")
-
-    schedule_rows = ""
-    for s in DAILY_SCHEDULE:
-        sent_at = bot_state["slot_log"].get(f"{today_str}_{s['id']}")
-        status_badge = f"<span style='color:#4cd964;'>✅ Опубликовано в {sent_at}</span>" if sent_at else "<span style='color:#ff9f0a;'>⏳ В очереди по расписанию</span>"
-        schedule_rows += f"<li style='margin-bottom:6px;'><b>{s['label']}</b> — {status_badge}</li>"
-
-    total_articles = sum(len(v) for v in EDITORIAL_POSTS.values())
-
-    return f"""
-    <html>
-    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Пульт Радара Путешествий MAX</title></head>
-    <body style="font-family: sans-serif; padding: 18px; background: #121212; color: #f0f0f0; line-height: 1.45;">
-        <h2>📡 Пульт управления: Радар Путешествий (MAX)</h2>
-        <p><b>Бот:</b> <span style="color:#4da3ff;">{diag_info['bot_profile']}</span></p>
-        <p><b>ID канала:</b> <code>{MAX_CHAT_ID}</code></p>
-        <p><b>База контента:</b> {len(ORIGINS)} городов вылета • {len(CITY_DATA)} курортов • {total_articles} экспертных статей</p>
-        <p><b>Последняя ссылка отеля:</b> <a href="{diag_info['last_hotel_url']}" style="color:#4cd964;">{diag_info['last_hotel_url']}</a></p>
-        <p><b>Текущее время бота (UTC+5):</b> <code>{now_local.strftime('%H:%M:%S')}</code></p>
-        <p><b>Статус отправки:</b> <code>{diag_info['last_send_status']}</code></p>
-        <p>
-            <a href="/send_tour_now" style="display:inline-block; margin:4px 8px 4px 0; padding:12px 18px; background:#28a745; color:#fff; text-decoration:none; border-radius:8px; font-weight:bold;">🔥 Опубликовать ТУР сейчас</a>
-            <a href="/send_now" style="display:inline-block; margin:4px 0; padding:12px 18px; background:#2b7de9; color:#fff; text-decoration:none; border-radius:8px; font-weight:bold;">📰 Опубликовать ГИД сейчас</a>
-        </p>
-        <hr style="border-color:#333;">
-        <h3>📅 Расписание на сегодня (7 постов в день, UTC+5):</h3>
-        <ul>{schedule_rows}</ul>
-    </body>
-    </html>
-    """, 200
-
-@app.route("/send_tour_now")
-def trigger_tour_now():
-    Thread(target=publish_single_tour_post, daemon=True).start()
-    time.sleep(1.5)
-    return redirect("/")
-
-@app.route("/send_now")
-def trigger_editorial_now():
-    pool = random.choice(["morning", "afternoon", "evening"])
-    Thread(target=lambda: publish_editorial_post(pool), daemon=True).start()
-    time.sleep(1.5)
-    return redirect("/")
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port)
